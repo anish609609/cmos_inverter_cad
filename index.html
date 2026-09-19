@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>CMOS Inverter — Physical Layout Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+  :root{
+    --bg: #0b0e13;
+    --panel: #11151c;
+    --panel-2: #161b24;
+    --border: #232b38;
+    --border-soft: #1a2029;
+    --text: #d7dee8;
+    --text-dim: #7d8ba0;
+    --text-faint: #4d5a6c;
+    --accent: #5fd9c4;
+    --accent-dim: #2c5a52;
+    --highlight: #ff2fb0;
+    --highlight-dim: #5c1846;
+    --warn: #e6a23c;
+    --danger: #e35d5d;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+
+    --c-substrate: #3a3f4b;
+    --c-well: #3f8f6f;
+    --c-active-p: #cf8a4a;
+    --c-active-n: #4a92c9;
+    --c-oxide: #dff0f7;
+    --c-poly: #d8503c;
+    --c-contact: #e8e2d5;
+    --c-metal: #4f86c9;
+    --c-vdd: #e35d5d;
+    --c-gnd: #6b7686;
+    --c-in: #e6c94a;
+    --c-out: #57cf8f;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#0b0e13; --panel:#11151c; --panel-2:#161b24; --border:#232b38; --text:#d7dee8; --text-dim:#7d8ba0;
+    }
+  }
+  :root[data-theme="dark"]{ }
+
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; width:100%; height:100%; background:var(--bg); overflow:hidden; }
+  body{ font-family: var(--sans); color: var(--text); }
+
+  #app{ position:fixed; inset:0; display:flex; flex-direction:column; }
+
+  /* ---------- Top bar ---------- */
+  #topbar{
+    height:48px; flex:0 0 auto; display:flex; align-items:center; gap:14px;
+    padding:0 14px; background:var(--panel); border-bottom:1px solid var(--border);
+    z-index:20;
+  }
+  #topbar .brand{ display:flex; align-items:center; gap:9px; margin-right:6px; }
+  #topbar .brand .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); flex:0 0 auto; }
+  #topbar .brand b{ font-family:var(--mono); font-size:12.5px; letter-spacing:.02em; color:var(--text); font-weight:600; }
+  #topbar .brand span{ font-family:var(--mono); font-size:10.5px; color:var(--text-faint); }
+
+  .seg{ display:flex; background:var(--panel-2); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .seg button{
+    appearance:none; border:none; background:transparent; color:var(--text-dim);
+    font-family:var(--mono); font-size:11px; padding:7px 11px; cursor:pointer;
+    border-right:1px solid var(--border); white-space:nowrap;
+  }
+  .seg button:last-child{ border-right:none; }
+  .seg button:hover{ color:var(--text); background:#1b2230; }
+  .seg button.active{ color:#08110f; background:var(--accent); font-weight:600; }
+
+  .tbtn{
+    appearance:none; border:1px solid var(--border); background:var(--panel-2); color:var(--text-dim);
+    font-family:var(--mono); font-size:11px; padding:7px 12px; border-radius:6px; cursor:pointer;
+  }
+  .tbtn:hover{ color:var(--text); border-color:#33404f; }
+  .tbtn.active{ color:#08110f; background:var(--accent); border-color:var(--accent); font-weight:600; }
+  .tbtn.warn.active{ background:var(--warn); border-color:var(--warn); }
+
+  #topbar .spacer{ flex:1; }
+  #topbar .right-cluster{ display:flex; align-items:center; gap:8px; }
+
+  .in-toggle{ display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10.5px; color:var(--text-faint); }
+
+  /* ---------- Body layout ---------- */
+  #body-row{ flex:1 1 auto; display:flex; min-height:0; position:relative; }
+
+  #left-panel, #right-panel{
+    width:250px; flex:0 0 auto; background:var(--panel); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; overflow-y:auto; z-index:15;
+  }
+  #right-panel{ border-right:none; border-left:1px solid var(--border); }
+
+  .panel-section{ border-bottom:1px solid var(--border-soft); }
+  .panel-head{
+    display:flex; align-items:center; justify-content:space-between; padding:10px 12px;
+    cursor:pointer; user-select:none;
+  }
+  .panel-head h3{
+    margin:0; font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; color:var(--text-dim); font-weight:600;
+  }
+  .panel-head .chev{ color:var(--text-faint); font-size:10px; transition:transform .15s; }
+  .panel-head .chev.closed{ transform:rotate(-90deg); }
+  .panel-body{ padding:2px 12px 12px 12px; }
+  .panel-body.hidden{ display:none; }
+
+  .layer-row{
+    display:flex; align-items:center; gap:8px; padding:5px 2px; cursor:pointer; border-radius:4px;
+  }
+  .layer-row:hover{ background:#161d28; }
+  .layer-row input{ accent-color: var(--accent); width:13px; height:13px; flex:0 0 auto; }
+  .layer-row .swatch{ width:11px; height:11px; border-radius:2px; flex:0 0 auto; border:1px solid rgba(255,255,255,.15); }
+  .layer-row label{ font-family:var(--mono); font-size:11px; color:var(--text); flex:1; cursor:pointer; }
+  .layer-row .count{ font-size:9.5px; color:var(--text-faint); }
+
+  .legend-item{ padding:7px 2px; border-bottom:1px dashed var(--border-soft); }
+  .legend-item:last-child{ border-bottom:none; }
+  .legend-item .lh{ display:flex; align-items:center; gap:7px; margin-bottom:3px; }
+  .legend-item .swatch{ width:11px; height:11px; border-radius:2px; border:1px solid rgba(255,255,255,.15); }
+  .legend-item .lh b{ font-family:var(--mono); font-size:10.5px; color:var(--text); letter-spacing:.03em; }
+  .legend-item p{ margin:0; font-size:10.5px; line-height:1.5; color:var(--text-dim); padding-left:18px; }
+
+  .dims-row-select{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px 0; }
+  .dims-lbl{ font-family:var(--mono); font-size:9.5px; color:var(--text-faint); letter-spacing:.06em; }
+  #lambda-select{
+    flex:1; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:5px;
+    font-family:var(--mono); font-size:10.5px; padding:5px 6px;
+  }
+  .dims-table-row{ display:flex; justify-content:space-between; gap:8px; padding:4px 2px; border-bottom:1px dashed var(--border-soft); font-family:var(--mono); font-size:10.5px; }
+  .dims-table-row:last-child{ border-bottom:none; }
+  .dims-table-row .k{ color:var(--text-dim); }
+  .dims-table-row .v{ color:var(--accent); font-weight:600; }
+  .dims-note{ margin:10px 0 0 0; font-size:9.5px; line-height:1.5; color:var(--text-faint); }
+
+  /* Architecture tree */
+  #tree ul{ list-style:none; margin:0; padding-left:14px; }
+  #tree > ul{ padding-left:0; }
+  #tree li{ position:relative; }
+  #tree .node{
+    font-family:var(--mono); font-size:11px; color:var(--text-dim); padding:3px 5px; border-radius:4px;
+    cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;
+  }
+  #tree .node:hover{ background:#161d28; color:var(--text); }
+  #tree .node.selected{ background:var(--highlight-dim); color:var(--highlight); }
+  #tree .node .bullet{ color:var(--text-faint); font-size:9px; }
+  #tree .branch{ color:var(--text-faint); }
+
+  /* Inspector */
+  #inspector .empty{ font-family:var(--mono); font-size:11px; color:var(--text-faint); line-height:1.6; padding:6px 2px; }
+  #inspector .title{ font-family:var(--mono); font-size:13px; font-weight:600; color:var(--accent); margin:2px 0 10px 0; letter-spacing:.02em; }
+  #inspector .field{ margin-bottom:9px; }
+  #inspector .field .k{ font-family:var(--mono); font-size:9.5px; color:var(--text-faint); letter-spacing:.08em; margin-bottom:2px; }
+  #inspector .field .v{ font-size:11.5px; color:var(--text); line-height:1.5; }
+
+  /* ---------- Viewport ---------- */
+  #viewport-wrap{ flex:1 1 auto; position:relative; min-width:0; background:radial-gradient(circle at 50% 40%, #10151d 0%, #0a0d12 75%); }
+  #canvas-host{ position:absolute; inset:0; }
+  #canvas-host canvas{ display:block; width:100%; height:100%; }
+
+  #schematic-overlay{
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column;
+    background: #0a0d12;
+  }
+  #schematic-overlay.visible{ display:flex; }
+  #schematic-overlay svg{ max-width:70%; max-height:70%; }
+  #schematic-overlay .cap{ font-family:var(--mono); font-size:10.5px; color:var(--text-faint); margin-top:14px; letter-spacing:.04em; max-width:520px; text-align:center; }
+  #schematic-overlay .sch-el{ cursor:pointer; }
+  #schematic-overlay .sch-el:hover{ filter:drop-shadow(0 0 5px var(--highlight)); }
+  #schematic-overlay .sch-el:hover line, #schematic-overlay .sch-el:hover circle{ stroke:var(--highlight) !important; }
+
+  /* floating HUD elements over viewport */
+  .hud{ position:absolute; z-index:10; pointer-events:none; }
+  .hud.interactive{ pointer-events:auto; }
+
+  #axis-indicator{ top:14px; left:14px; font-family:var(--mono); font-size:9.5px; color:var(--text-faint); line-height:1.7; }
+  #axis-indicator b{ color:var(--text-dim); }
+
+  #crumb{
+    top:14px; left:50%; transform:translateX(-50%); text-align:center;
+    font-family:var(--mono); font-size:10.5px; color:var(--text-faint); letter-spacing:.06em;
+  }
+  #crumb b{ color:var(--accent); }
+
+  #flow-caption{
+    top:38px; left:50%; transform:translateX(-50%); text-align:center;
+    font-family:var(--mono); font-size:10px; color:#ffd479; letter-spacing:.04em;
+    background:rgba(11,14,19,.6); padding:4px 10px; border-radius:5px; display:none;
+  }
+  #flow-caption.visible{ display:block; }
+
+  #note{
+    bottom:14px; left:14px; max-width:420px; font-family:var(--mono); font-size:9.5px;
+    color:var(--text-faint); line-height:1.6; background:rgba(11,14,19,.55); padding:8px 10px; border-radius:6px;
+    border:1px solid var(--border-soft);
+  }
+
+  #state-badge{
+    top:14px; right:14px; font-family:var(--mono); font-size:10px; color:var(--text-dim);
+    background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:8px 11px; text-align:right;
+    display:none; line-height:1.7;
+  }
+  #state-badge.visible{ display:block; }
+  #state-badge .row{ display:flex; justify-content:space-between; gap:14px; }
+  #state-badge .row .l{ color:var(--text-faint); }
+  #state-badge .row .v{ font-weight:600; }
+  #state-badge .v.on{ color:var(--c-out); }
+  #state-badge .v.off{ color:var(--danger); }
+  #state-badge .disclaimer{ margin-top:6px; font-size:8.5px; color:var(--text-faint); max-width:180px; text-align:right; }
+
+  #explode-hud{
+    bottom:14px; right:14px; width:210px; pointer-events:auto;
+    background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px;
+  }
+  #explode-hud .row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  #explode-hud label{ font-family:var(--mono); font-size:9.5px; color:var(--text-dim); letter-spacing:.05em; }
+  #explode-hud .val{ font-family:var(--mono); font-size:9.5px; color:var(--accent); }
+  #explode-hud input[type=range]{ width:100%; accent-color: var(--accent); }
+
+  #xsection-hud{
+    bottom:14px; right:236px; width:190px; pointer-events:auto;
+    background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px; display:none;
+  }
+  #xsection-hud.visible{ display:block; }
+  #xsection-hud label{ font-family:var(--mono); font-size:9.5px; color:var(--text-dim); letter-spacing:.05em; display:block; margin-bottom:6px; }
+  #xsection-hud input[type=range]{ width:100%; accent-color: var(--warn); }
+
+  #xsection-inset{
+    position:absolute; bottom:14px; left:50%; transform:translateX(-50%); width:320px; display:none;
+    background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px; pointer-events:none;
+  }
+  #xsection-inset.visible{ display:block; }
+  #xsection-inset .lbl{ font-family:var(--mono); font-size:9px; color:var(--text-faint); letter-spacing:.08em; margin-bottom:6px; text-align:center; }
+
+  #loading{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px;
+    background:var(--bg); z-index:100; font-family:var(--mono); color:var(--text-dim); font-size:11px; letter-spacing:.05em;
+  }
+  #loading .spin{ width:22px; height:22px; border-radius:50%; border:2px solid #232b38; border-top-color:var(--accent); animation:spin 0.8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background:#232b38; border-radius:4px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+
+  @media (max-width: 860px){
+    #left-panel, #right-panel{ width:200px; }
+    #topbar{ flex-wrap:wrap; height:auto; padding:8px 10px; }
+    #xsection-hud{ right:14px; bottom:220px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spin"></div><div>INITIALIZING VIEWPORT…</div></div>
+
+<div id="app">
+
+  <div id="topbar">
+    <div class="brand"><span class="dot"></span><b>CMOS·VIEWER</b><span>inverter / rev 01</span></div>
+
+    <div class="seg" id="mode-seg">
+      <button data-mode="layout" class="active">PHYSICAL LAYOUT</button>
+      <button data-mode="schematic">SCHEMATIC</button>
+    </div>
+
+    <button class="tbtn" id="btn-connections">SHOW CONNECTIONS</button>
+    <div class="seg" id="flow-seg" title="Direction convention for the animated flow markers">
+      <button data-flow="current" class="active">CURRENT</button>
+      <button data-flow="electron">ELECTRONS</button>
+    </div>
+    <button class="tbtn warn" id="btn-xsection">CROSS SECTION</button>
+
+    <div class="in-toggle">
+      IN =
+      <div class="seg" id="in-seg">
+        <button data-in="0" class="active">0</button>
+        <button data-in="1">1</button>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="right-cluster">
+      <div class="seg" id="cam-seg">
+        <button data-cam="persp" class="active">PERSPECTIVE</button>
+        <button data-cam="ortho">ORTHOGRAPHIC</button>
+      </div>
+      <button class="tbtn" id="btn-reset-cam">RESET VIEW</button>
+    </div>
+  </div>
+
+  <div id="body-row">
+
+    <div id="left-panel">
+      <div class="panel-section">
+        <div class="panel-head" data-target="layers-body"><h3>LAYER VISIBILITY</h3><span class="chev">▾</span></div>
+        <div class="panel-body" id="layers-body"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-head" data-target="legend-body"><h3>LAYER LEGEND</h3><span class="chev">▾</span></div>
+        <div class="panel-body" id="legend-body"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-head" data-target="dims-body"><h3>DIMENSIONS (λ RULES)</h3><span class="chev">▾</span></div>
+        <div class="panel-body" id="dims-body">
+          <div class="dims-row-select">
+            <label for="lambda-select" class="dims-lbl">λ (LAMBDA)</label>
+            <select id="lambda-select"></select>
+          </div>
+          <div id="dims-table"></div>
+          <p class="dims-note">λ-scaled Mead–Conway style rules, illustrative only — not a specific fabricated PDK. Click any component in the 3D view (or the schematic, or the tree) to see its own dimensions in the Property Inspector below.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewport-wrap">
+      <div id="canvas-host"></div>
+
+      <div id="schematic-overlay">
+        <svg viewBox="0 0 360 460" xmlns="http://www.w3.org/2000/svg" fill="none">
+
+          <!-- VDD -->
+          <g class="sch-el" data-id="vddRail">
+            <rect x="150" y="6" width="60" height="70" fill="transparent"/>
+            <text x="180" y="18" fill="#e35d5d" font-family="IBM Plex Mono" font-size="13" text-anchor="middle">VDD</text>
+            <line x1="180" y1="24" x2="180" y2="70" stroke="#e35d5d" stroke-width="2.5"/>
+            <circle cx="180" cy="70" r="3" fill="#e35d5d"/>
+          </g>
+
+          <!-- PMOS transistor symbol: source(top,VDD) / gate(left, bubble = P-channel) / drain(bottom,OUT) -->
+          <g class="sch-el" data-id="pmosSrc">
+            <rect x="160" y="66" width="40" height="16" fill="transparent"/>
+            <line x1="180" y1="70" x2="180" y2="95" stroke="#cf8a4a" stroke-width="2.5"/>
+          </g>
+          <g class="sch-el" data-id="pmos">
+            <rect x="105" y="90" width="110" height="55" fill="transparent"/>
+            <line x1="165" y1="95" x2="165" y2="135" stroke="#cf8a4a" stroke-width="2.5"/>
+            <line x1="180" y1="95" x2="180" y2="105" stroke="#cf8a4a" stroke-width="2.5"/>
+            <line x1="180" y1="110" x2="180" y2="120" stroke="#cf8a4a" stroke-width="2.5"/>
+            <line x1="180" y1="125" x2="180" y2="135" stroke="#cf8a4a" stroke-width="2.5"/>
+            <line x1="130" y1="115" x2="146" y2="115" stroke="#e6c94a" stroke-width="2.5"/>
+            <circle cx="153" cy="115" r="4.5" fill="none" stroke="#e6c94a" stroke-width="2"/>
+            <circle cx="180" cy="70" r="0" fill="none"/>
+            <text x="222" y="119" fill="#cf8a4a" font-family="IBM Plex Mono" font-size="12" text-anchor="start">PMOS</text>
+            <text x="222" y="132" fill="#8a95a6" font-family="IBM Plex Mono" font-size="8" text-anchor="start">(N-well body)</text>
+          </g>
+          <g class="sch-el" data-id="pmosDrn">
+            <rect x="160" y="129" width="40" height="16" fill="transparent"/>
+            <line x1="180" y1="135" x2="180" y2="150" stroke="#cf8a4a" stroke-width="2.5"/>
+          </g>
+
+          <!-- OUT node -->
+          <g class="sch-el" data-id="outPin">
+            <rect x="150" y="144" width="140" height="42" fill="transparent"/>
+            <line x1="180" y1="150" x2="180" y2="205" stroke="#57cf8f" stroke-width="2.5"/>
+            <circle cx="180" cy="177" r="3.5" fill="#57cf8f"/>
+            <line x1="180" y1="177" x2="270" y2="177" stroke="#57cf8f" stroke-width="2.5"/>
+            <text x="278" y="181" fill="#57cf8f" font-family="IBM Plex Mono" font-size="13" text-anchor="start">OUT</text>
+          </g>
+
+          <!-- NMOS transistor symbol: drain(top,OUT) / gate(left, no bubble = N-channel) / source(bottom,GND) -->
+          <g class="sch-el" data-id="nmosDrn">
+            <rect x="160" y="196" width="40" height="16" fill="transparent"/>
+            <line x1="180" y1="205" x2="180" y2="225" stroke="#4a92c9" stroke-width="2.5"/>
+          </g>
+          <g class="sch-el" data-id="nmos">
+            <rect x="105" y="220" width="110" height="55" fill="transparent"/>
+            <line x1="165" y1="225" x2="165" y2="265" stroke="#4a92c9" stroke-width="2.5"/>
+            <line x1="180" y1="225" x2="180" y2="235" stroke="#4a92c9" stroke-width="2.5"/>
+            <line x1="180" y1="240" x2="180" y2="250" stroke="#4a92c9" stroke-width="2.5"/>
+            <line x1="180" y1="255" x2="180" y2="265" stroke="#4a92c9" stroke-width="2.5"/>
+            <line x1="130" y1="245" x2="165" y2="245" stroke="#e6c94a" stroke-width="2.5"/>
+            <text x="222" y="249" fill="#4a92c9" font-family="IBM Plex Mono" font-size="12" text-anchor="start">NMOS</text>
+            <text x="222" y="262" fill="#8a95a6" font-family="IBM Plex Mono" font-size="8" text-anchor="start">(P-substrate body)</text>
+          </g>
+          <g class="sch-el" data-id="nmosSrc">
+            <rect x="160" y="259" width="40" height="16" fill="transparent"/>
+            <line x1="180" y1="265" x2="180" y2="280" stroke="#4a92c9" stroke-width="2.5"/>
+          </g>
+
+          <!-- GND -->
+          <g class="sch-el" data-id="gndRail">
+            <rect x="150" y="278" width="60" height="55" fill="transparent"/>
+            <line x1="180" y1="280" x2="180" y2="312" stroke="#9aa6b6" stroke-width="2.5"/>
+            <line x1="164" y1="312" x2="196" y2="312" stroke="#9aa6b6" stroke-width="2.5"/>
+            <line x1="170" y1="318" x2="190" y2="318" stroke="#9aa6b6" stroke-width="2"/>
+            <line x1="176" y1="323" x2="184" y2="323" stroke="#9aa6b6" stroke-width="1.5"/>
+            <text x="180" y="342" fill="#9aa6b6" font-family="IBM Plex Mono" font-size="13" text-anchor="middle">GND</text>
+          </g>
+
+          <!-- IN: common gate bus -->
+          <g class="sch-el" data-id="inPin">
+            <rect x="35" y="105" width="100" height="150" fill="transparent"/>
+            <line x1="130" y1="115" x2="100" y2="115" stroke="#e6c94a" stroke-width="2.5"/>
+            <line x1="100" y1="115" x2="100" y2="245" stroke="#e6c94a" stroke-width="2.5"/>
+            <line x1="100" y1="245" x2="130" y2="245" stroke="#e6c94a" stroke-width="2.5"/>
+            <line x1="100" y1="180" x2="55" y2="180" stroke="#e6c94a" stroke-width="2.5"/>
+            <circle cx="55" cy="180" r="3.5" fill="#e6c94a"/>
+            <text x="45" y="184" fill="#e6c94a" font-family="IBM Plex Mono" font-size="13" text-anchor="end">IN</text>
+          </g>
+
+          <text x="180" y="30" fill="none" font-size="0">.</text>
+        </svg>
+        <div class="cap">CMOS INVERTER — SCHEMATIC · click any terminal, gate or net to locate it in the 3D layout · bubble on gate = PMOS (P-channel)</div>
+      </div>
+
+      <div class="hud" id="axis-indicator">
+        <div><b>X</b> — source · drain axis</div>
+        <div><b>Y</b> — process layer stack</div>
+        <div><b>Z</b> — PMOS (N‑well) / NMOS (substrate)</div>
+      </div>
+
+      <div class="hud" id="crumb">CMOS INVERTER <span id="crumb-sel"></span></div>
+
+      <div class="hud" id="flow-caption"></div>
+
+      <div class="hud" id="note">
+        Vertical dimensions are exaggerated for visualization; this is a conceptual CMOS layout, not a fabrication-ready PDK layout. Dimensions, spacing and layer thicknesses are not design-rule compliant — topology and functional relationships are physically meaningful.
+      </div>
+
+      <div class="hud" id="state-badge">
+        <div class="row"><span class="l">IN</span><span class="v" id="badge-in">0</span></div>
+        <div class="row"><span class="l">PMOS</span><span class="v" id="badge-pmos">ON</span></div>
+        <div class="row"><span class="l">NMOS</span><span class="v" id="badge-nmos">OFF</span></div>
+        <div class="row"><span class="l">OUT</span><span class="v" id="badge-out">1</span></div>
+        <div class="disclaimer">Logical/behavioral visualization — not a transistor-level physical simulation.</div>
+      </div>
+
+      <div class="hud interactive" id="explode-hud">
+        <div class="row"><label>EXPLODE LAYERS</label><span class="val" id="explode-val">0%</span></div>
+        <input type="range" id="explode-slider" min="0" max="100" value="0">
+      </div>
+
+      <div class="hud interactive" id="xsection-hud">
+        <label>SCRUB SECTION PLANE (X)</label>
+        <input type="range" id="xsection-slider" min="-1100" max="1100" value="0">
+      </div>
+
+      <div class="hud" id="xsection-inset">
+        <div class="lbl">CONCEPTUAL MOSFET CROSS-SECTION (schematic, not geometry-accurate)</div>
+        <svg viewBox="0 0 300 140" width="100%">
+          <rect x="0" y="96" width="300" height="30" fill="#3a3f4b"/>
+          <text x="8" y="129" fill="#8a95a6" font-family="IBM Plex Mono" font-size="9">P-SUBSTRATE</text>
+          <rect x="30" y="84" width="110" height="12" fill="#3f8f6f" opacity="0.8"/>
+          <text x="35" y="82" fill="#6fd1ac" font-family="IBM Plex Mono" font-size="8">N-WELL</text>
+          <rect x="35" y="76" width="35" height="8" fill="#cf8a4a"/>
+          <rect x="105" y="76" width="35" height="8" fill="#cf8a4a"/>
+          <rect x="160" y="88" width="35" height="8" fill="#4a92c9"/>
+          <rect x="230" y="88" width="35" height="8" fill="#4a92c9"/>
+
+          <!-- PMOS gate stack: poly / oxide / channel -->
+          <rect x="70" y="52" width="35" height="14" fill="#d8503c"/>
+          <text x="72" y="47" fill="#e07a68" font-family="IBM Plex Mono" font-size="8">POLY</text>
+          <rect x="70" y="66" width="35" height="3.5" fill="#dff0f7"/>
+          <rect x="70" y="72" width="35" height="4" fill="#0d1015" opacity="0.55"/>
+          <text x="79" y="103" fill="#c7cfdb" font-family="IBM Plex Mono" font-size="7">CHANNEL</text>
+
+          <!-- NMOS gate stack: poly / oxide / channel -->
+          <rect x="195" y="64" width="35" height="14" fill="#d8503c"/>
+          <rect x="195" y="78" width="35" height="3.5" fill="#dff0f7"/>
+          <rect x="195" y="84" width="35" height="4" fill="#0d1015" opacity="0.55"/>
+
+          <!-- shared GATE OXIDE callout -->
+          <line x1="105" y1="68" x2="150" y2="52" stroke="#8fc9dc" stroke-width="1"/>
+          <text x="152" y="53" fill="#8fc9dc" font-family="IBM Plex Mono" font-size="8">GATE OXIDE (SiO₂)</text>
+          <line x1="150" y1="52" x2="230" y2="80" stroke="#8fc9dc" stroke-width="1" stroke-dasharray="2,2"/>
+        </svg>
+      </div>
+
+    </div>
+
+    <div id="right-panel">
+      <div class="panel-section">
+        <div class="panel-head" data-target="tree-body"><h3>ARCHITECTURE TREE</h3><span class="chev">▾</span></div>
+        <div class="panel-body" id="tree-body"><div id="tree"></div></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-head" data-target="inspector-body"><h3>PROPERTY INSPECTOR</h3><span class="chev">▾</span></div>
+        <div class="panel-body" id="inspector-body">
+          <div id="inspector"><div class="empty">Select a layer, region, or tree node to inspect its function, electrical role, and physical relationships.</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+
+// =====================================================================
+// DATA: legend / inspector info
+// =====================================================================
+var LEGEND = [
+  { key:'substrate', name:'P-SUBSTRATE', color:'var(--c-substrate)', desc:'Base silicon region. The NMOS transistor is built directly in this p-type substrate.' },
+  { key:'well',      name:'N-WELL',      color:'var(--c-well)',      desc:'N-type well diffused into the substrate. Contains and isolates the PMOS transistor.' },
+  { key:'active',    name:'ACTIVE / DIFFUSION', color:'var(--c-active-p)', desc:'Region where transistor source/drain structures are formed, in both the well (PMOS) and substrate (NMOS).' },
+  { key:'oxide',     name:'GATE OXIDE',  color:'var(--c-oxide)',     desc:'Thin SiO₂ dielectric between poly and the channel. Insulating — carries no current, only couples the gate field.' },
+  { key:'poly',      name:'POLYSILICON', color:'var(--c-poly)',      desc:'Gate electrode material. A single continuous strip crosses both active regions, forming both gates.' },
+  { key:'contact',   name:'CONTACT',     color:'var(--c-contact)',   desc:'Vertical connection between diffusion/poly and Metal-1. Never a direct wire — always a discrete via.' },
+  { key:'metal',     name:'METAL-1',     color:'var(--c-metal)',     desc:'First interconnect layer, used to route electrical nodes across longer distances than poly allows.' },
+  { key:'vdd',       name:'VDD',         color:'var(--c-vdd)',       desc:'Supply rail. Connects only to the PMOS source (through contact + metal).' },
+  { key:'gnd',       name:'GND',         color:'var(--c-gnd)',       desc:'Ground rail. Connects only to the NMOS source (through contact + metal).' },
+  { key:'in',        name:'IN',          color:'var(--c-in)',        desc:'Input net. Routed in Metal-1 to a contact that drops onto the shared polysilicon gate.' },
+  { key:'out',       name:'OUT',         color:'var(--c-out)',       desc:'Output net. The common drain node — Metal-1 ties the PMOS drain contact to the NMOS drain contact.' }
+];
+
+var INFO = {
+  psub: { title:'P-SUBSTRATE', fn:'Base bulk silicon region of the die.', role:'Body terminal of the NMOS transistor; normally tied to GND via the substrate tap.', conn:'Substrate tap → GND', rel:'Hosts the N-well and the NMOS active region directly.', doping:'P-type, lightly doped — Na ≈ 1×10¹⁵ cm⁻³ (illustrative)' },
+  nwell:{ title:'N-WELL', fn:'N-type doped tub inside the p-substrate.', role:'Body terminal of the PMOS transistor; normally tied to VDD via the well tap.', conn:'Well tap → VDD', rel:'Contains the PMOS active region; isolates PMOS from the p-substrate.', doping:'N-type, moderate — Nd ≈ 1×10¹⁷ cm⁻³ (illustrative)' },
+  actP: { title:'ACTIVE / DIFFUSION — PMOS', fn:'Diffusion region where the PMOS source and drain are formed.', role:'Carries current between VDD and OUT when the PMOS channel is ON.', conn:'Source → VDD · Drain → OUT', rel:'Sits inside the N-well; crossed by the shared polysilicon gate.', doping:'P+, heavily doped — Na ≈ 1×10²⁰ cm⁻³ (illustrative)' },
+  actN: { title:'ACTIVE / DIFFUSION — NMOS', fn:'Diffusion region where the NMOS source and drain are formed.', role:'Carries current between OUT and GND when the NMOS channel is ON.', conn:'Source → GND · Drain → OUT', rel:'Sits in the p-substrate outside the well; crossed by the shared polysilicon gate.', doping:'N+, heavily doped — Nd ≈ 1×10²⁰ cm⁻³ (illustrative)' },
+  oxide:{ title:'GATE OXIDE', fn:'Thin dielectric (SiO₂) separating the polysilicon gate from the silicon channel.', role:'Forms the MOS capacitor: the gate voltage capacitively controls the channel through this insulator — it carries no steady-state current.', conn:'Sandwiched between POLY (above) and the ACTIVE channel (below); not electrically connected to any net.', rel:'Present only where poly crosses the active region — i.e. directly under each gate.', doping:'Undoped dielectric — tOX ≈ 2 nm equivalent (illustrative, exaggerated in the model for visibility)' },
+  poly: { title:'POLYSILICON — COMMON CMOS GATE', fn:'Gate electrode. A single continuous strip, not a wire.', role:'Controls both the PMOS and NMOS channels simultaneously.', conn:'IN (via a contact at the far end of the strip)', rel:'Crosses the PMOS active region (forming the PMOS gate) and continues across the NMOS active region (forming the NMOS gate).' },
+  contact:{ title:'CONTACT', fn:'Discrete vertical via.', role:'Bridges the physical gap between diffusion or poly and the Metal-1 layer above.', conn:'Diffusion/Poly ↔ Metal-1', rel:'One of several — placed at every source, drain, gate-tail, and tap location.' },
+  metal: { title:'METAL-1', fn:'First metal interconnect layer.', role:'Routes electrical nodes across the layout — VDD, GND, IN and OUT all live here.', conn:'Everything, via contacts', rel:'Sits above the contact layer; the topmost layer in this model.' },
+  pmos: { title:'PMOS TRANSISTOR', fn:'P-channel MOSFET.', role:'Pulls OUT up to VDD when IN = 0 (gate low turns PMOS on).', conn:'Source → VDD · Gate → IN · Drain → OUT', rel:'Built in the N-well from active diffusion + the shared poly gate.' },
+  nmos: { title:'NMOS TRANSISTOR', fn:'N-channel MOSFET.', role:'Pulls OUT down to GND when IN = 1 (gate high turns NMOS on).', conn:'Source → GND · Gate → IN · Drain → OUT', rel:'Built in the p-substrate from active diffusion + the shared poly gate.' },
+  vdd:  { title:'VDD', fn:'Positive supply rail, Metal-1.', role:'Sourced only through the PMOS transistor — never directly tied to GND.', conn:'PMOS source, N-well tap', rel:'Runs along the layout edge nearest the PMOS row.' },
+  gnd:  { title:'GND', fn:'Ground rail, Metal-1.', role:'Sunk only through the NMOS transistor — never directly tied to VDD.', conn:'NMOS source, substrate tap', rel:'Runs along the layout edge nearest the NMOS row.' },
+  inNet:{ title:'IN', fn:'Input net, Metal-1.', role:'Drives both transistor gates at once through the shared poly.', conn:'Contact → POLY GATE', rel:'Enters from outside the cell and drops onto the polysilicon tail.' },
+  outNet:{ title:'OUT', fn:'Output net, Metal-1 — the common drain node.', role:'Driven high by PMOS or low by NMOS, never both at once.', conn:'PMOS drain contact ↔ NMOS drain contact', rel:'The defining node of the inverter — where the two transistors meet.' },
+  welltap:{ title:'N-WELL TAP', fn:'Heavily doped N+ contact into the N-well.', role:'Biases the well to VDD, preventing latch-up and forward-biased junctions.', conn:'N-well → contact → Metal-1 → VDD', rel:'Placed at the edge of the well region.', doping:'N+, heavily doped — Nd ≈ 1×10²⁰ cm⁻³ (illustrative)' },
+  subtap:{ title:'SUBSTRATE TAP', fn:'Heavily doped P+ contact into the substrate.', role:'Biases the substrate to GND, preventing latch-up and forward-biased junctions.', conn:'P-substrate → contact → Metal-1 → GND', rel:'Placed at the edge of the NMOS row.', doping:'P+, heavily doped — Na ≈ 1×10²⁰ cm⁻³ (illustrative)' }
+};
+
+// =====================================================================
+// THREE.JS SETUP
+// =====================================================================
+var host = document.getElementById('canvas-host');
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0d12);
+scene.fog = new THREE.Fog(0x0a0d12, 55, 130);
+
+var W = function(){ return host.clientWidth; };
+var H = function(){ return host.clientHeight; };
+
+var camPersp = new THREE.PerspectiveCamera(42, W()/H(), 0.1, 500);
+var ORTHO_SIZE = 13;
+var camOrtho = new THREE.OrthographicCamera(-ORTHO_SIZE*W()/H(), ORTHO_SIZE*W()/H(), ORTHO_SIZE, -ORTHO_SIZE, 0.1, 500);
+var INITIAL_POS = new THREE.Vector3(19, 15, 22);
+var INITIAL_TARGET = new THREE.Vector3(-0.5, 1.9, 0);
+camPersp.position.copy(INITIAL_POS);
+camOrtho.position.copy(INITIAL_POS);
+
+var renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.localClippingEnabled = true;
+host.appendChild(renderer.domElement);
+
+var activeCamera = camPersp;
+var controls = new THREE.OrbitControls(activeCamera, renderer.domElement);
+controls.target.copy(INITIAL_TARGET);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 4;
+controls.maxDistance = 85;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.update();
+
+function resize(){
+  var w = W(), h = H();
+  camPersp.aspect = w/h; camPersp.updateProjectionMatrix();
+  camOrtho.left = -ORTHO_SIZE*w/h; camOrtho.right = ORTHO_SIZE*w/h;
+  camOrtho.top = ORTHO_SIZE; camOrtho.bottom = -ORTHO_SIZE;
+  camOrtho.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', resize);
+
+// lights
+scene.add(new THREE.AmbientLight(0x2a3140, 1.1));
+var key = new THREE.DirectionalLight(0xffffff, 1.15);
+key.position.set(16, 24, 12);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left = -22; key.shadow.camera.right = 22;
+key.shadow.camera.top = 22; key.shadow.camera.bottom = -22;
+key.shadow.camera.far = 85;
+key.shadow.bias = -0.0015;
+scene.add(key);
+var fill = new THREE.DirectionalLight(0x5fa8d9, 0.35);
+fill.position.set(-14, 10, -10);
+scene.add(fill);
+var rim = new THREE.DirectionalLight(0x5fd9c4, 0.25);
+rim.position.set(0, 6, -18);
+scene.add(rim);
+
+// grid + ground shadow catcher
+var grid = new THREE.GridHelper(60, 40, 0x1c2530, 0x141a22);
+grid.position.y = -0.02;
+scene.add(grid);
+var shadowPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(90,90),
+  new THREE.ShadowMaterial({ opacity: 0.28 })
+);
+shadowPlane.rotation.x = -Math.PI/2;
+shadowPlane.position.y = -0.01;
+shadowPlane.receiveShadow = true;
+scene.add(shadowPlane);
+
+// =====================================================================
+// GEOMETRY HELPERS
+// =====================================================================
+function cssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+// Radial gradient texture used on doped regions (well / active) so the
+// region reads as a concentration profile fading from a denser core to its
+// boundary, rather than a single flat slab of color.
+var dopingTexCache = {};
+function dopingTexture(strength){
+  strength = strength || 1;
+  var key = strength;
+  if (dopingTexCache[key]) return dopingTexCache[key];
+  var size = 256;
+  var c = document.createElement('canvas'); c.width = c.height = size;
+  var ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.fillRect(0,0,size,size);
+  var g = ctx.createRadialGradient(size/2,size/2, size*0.04, size/2,size/2, size*0.62);
+  g.addColorStop(0, 'rgba(255,255,255,' + (0.95*strength) + ')');
+  g.addColorStop(0.35, 'rgba(255,255,255,' + (0.62*strength) + ')');
+  g.addColorStop(0.72, 'rgba(255,255,255,0.28)');
+  g.addColorStop(1, 'rgba(255,255,255,0.05)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,size,size);
+  // faint concentric "iso-concentration" rings, like a dopant-diffusion profile
+  ctx.strokeStyle = 'rgba(10,13,18,0.35)';
+  ctx.lineWidth = 2;
+  for (var r = size*0.14; r < size*0.62; r += size*0.14){
+    ctx.beginPath(); ctx.arc(size/2, size/2, r, 0, Math.PI*2); ctx.stroke();
+  }
+  var tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  dopingTexCache[key] = tex;
+  return tex;
+}
+
+function box(w,h,d, colorVar, opts){
+  opts = opts || {};
+  var matParams = {
+    color: new THREE.Color(cssVar(colorVar)),
+    roughness: opts.roughness !== undefined ? opts.roughness : 0.65,
+    metalness: opts.metalness !== undefined ? opts.metalness : 0.15,
+    transparent: !!opts.transparent,
+    opacity: opts.opacity !== undefined ? opts.opacity : 1,
+    emissive: 0x000000,
+    emissiveIntensity: 0
+  };
+  if (opts.doping){
+    matParams.map = dopingTexture(opts.dopingStrength || 1);
+  }
+  var mat = new THREE.MeshStandardMaterial(matParams);
+  var geo = new THREE.BoxGeometry(w,h,d);
+  var mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = !opts.noShadow;
+  mesh.receiveShadow = true;
+  mesh.userData.baseEmissive = 0x000000;
+  mesh.userData.baseEmissiveIntensity = 0;
+  if (opts.outline !== false && (opts.doping || opts.outlineColor)){
+    var edges = new THREE.EdgesGeometry(geo);
+    var lineMat = new THREE.LineBasicMaterial({
+      color: opts.outlineColor ? new THREE.Color(opts.outlineColor) : new THREE.Color(cssVar(colorVar)),
+      transparent: true, opacity: 0.85
+    });
+    var line = new THREE.LineSegments(edges, lineMat);
+    line.raycast = function(){}; // outlines shouldn't intercept clicks
+    mesh.add(line);
+  }
+  return mesh;
+}
+function put(mesh, x,y,z){ mesh.position.set(x,y,z); return mesh; }
+
+var clipPlane = new THREE.Plane(new THREE.Vector3(-1,0,0), 999);
+renderer.clippingPlanes = [];
+
+// canvas-sprite labels
+function makeLabel(text, colorHex){
+  var pad = 10, fontSize = 26;
+  var canvas = document.createElement('canvas');
+  var ctx = canvas.getContext('2d');
+  ctx.font = '600 ' + fontSize + 'px IBM Plex Mono, monospace';
+  var metrics = ctx.measureText(text);
+  canvas.width = Math.ceil(metrics.width) + pad*2;
+  canvas.height = fontSize + pad*2;
+  ctx.font = '600 ' + fontSize + 'px IBM Plex Mono, monospace';
+  ctx.fillStyle = 'rgba(10,13,18,0.72)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = colorHex; ctx.lineWidth = 1.5;
+  ctx.strokeRect(0.75,0.75,canvas.width-1.5,canvas.height-1.5);
+  ctx.fillStyle = colorHex;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, pad, canvas.height/2 + 1);
+  var tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  var mat = new THREE.SpriteMaterial({ map: tex, depthTest:false, depthWrite:false, transparent:true });
+  var sprite = new THREE.Sprite(mat);
+  var scale = 0.014;
+  sprite.scale.set(canvas.width*scale, canvas.height*scale, 1);
+  sprite.renderOrder = 999;
+  return sprite;
+}
+
+// =====================================================================
+// LAYOUT CONSTANTS
+// =====================================================================
+// Real-transistor proportions: the gate sits directly between source and
+// drain with NO gap (they physically abut it), diffusion is recessed into
+// the well/substrate surface rather than stacked on top of it, and every
+// routing wire is placed to avoid crossing another SAME-LAYER wire's
+// footprint (poly may legally run under a metal rail — different layer,
+// separated by dielectric, exactly like a real die — but two Metal-1 wires
+// must never overlap in plan view or they would short together).
+var Y = {
+  subBot: 0.0, subTop: 2.0,
+  wellBot: 1.10, wellTop: 2.05,     // sits in the UPPER part of the substrate slab, barely proud of it
+  actBot: 1.55, actTop: 1.95,       // recessed well below the well/substrate top surface — genuinely "inside", not stacked on top
+  oxideBot: 1.95, oxideTop: 2.02,   // thin dielectric, exaggerated for visibility, only under the gates
+  polyBot: 2.02, polyTop: 2.32,
+  metalBot: 2.95, metalTop: 3.25
+};
+
+var CH = { min:-1.0, max:1.0 };            // gate/channel — 2 units = 2λ gate length
+var SRC_X0 = -4.0, SRC_X1 = CH.min;        // source diffusion block — flush against the gate, no gap
+var DRN_X0 = CH.max, DRN_X1 = 4.0;         // drain diffusion block — flush against the gate, no gap
+var SRC_X = (SRC_X0+SRC_X1)/2;             // -2.5 — source contact, centered in its own diffusion block
+var DRN_X = (DRN_X0+DRN_X1)/2;             //  2.5 — drain contact,  centered in its own diffusion block
+var TAP_X = -6.0;                          // well/substrate tap, clear of the source block (-4.0)
+
+var ACTIVE_W = 6.0;                        // transistor width (Z-depth of source/gate/drain) — matches the 6λ gate-width rule
+var PMOS_ZC = 3.5, PMOS_Z0 = PMOS_ZC-ACTIVE_W/2, PMOS_Z1 = PMOS_ZC+ACTIVE_W/2;
+var NMOS_ZC = -3.5, NMOS_Z0 = NMOS_ZC-ACTIVE_W/2, NMOS_Z1 = NMOS_ZC+ACTIVE_W/2;
+
+// Poly runs flush across BOTH transistor bands (no wasted overhang), with
+// only a short stub past the PMOS edge to land the IN contact on field poly
+// — never over active silicon, and short enough to stay well clear of the
+// VDD rail's footprint below.
+var POLY_Z0 = NMOS_Z0;
+var POLY_Z1 = PMOS_Z1 + 0.6;
+var POLY_CT_Z = PMOS_Z1 + 0.3;             // IN contact — on the poly tail, just past the PMOS diffusion edge
+
+var RAIL_Z = PMOS_Z1 + 1.8;                // VDD rail sits OUTSIDE the poly/IN tail entirely — no Metal-1-on-Metal-1 overlap
+
+var LAYER_ORDER = ['substrate','well','active','oxide','poly','contact','metal'];
+var EXPLODE_GAP = 3.2;
+
+var groups = {};
+LAYER_ORDER.forEach(function(k){ groups[k] = new THREE.Group(); groups[k].name = k; scene.add(groups[k]); });
+
+var selectable = [];   // meshes clickable / highlightable
+
+function reg(mesh, id, layerKey){
+  mesh.userData.id = id;
+  mesh.userData.layer = layerKey;
+  selectable.push(mesh);
+  groups[layerKey].add(mesh);
+  return mesh;
+}
+
+// ---------- SUBSTRATE ----------
+// A generous die slab — a single transistor really is tiny compared to the
+// bulk wafer material it sits in, so the substrate is deliberately much
+// bigger than the active devices, not sized to hug them.
+var subMesh = box(22, Y.subTop-Y.subBot, 26, '--c-substrate', { roughness:0.85, metalness:0.05 });
+put(subMesh, -0.5, (Y.subTop+Y.subBot)/2, 0);
+reg(subMesh, 'psub', 'substrate');
+
+// ---------- N-WELL ----------
+var wellMesh = box(12.2, Y.wellTop-Y.wellBot, PMOS_Z1-0.6, '--c-well', {
+  transparent:true, opacity:0.58, roughness:0.35, metalness:0.1,
+  doping:true, dopingStrength:0.85, outlineColor:'#8fe6c8'
+});
+put(wellMesh, -1.0, (Y.wellTop+Y.wellBot)/2, (0.3+(PMOS_Z1-0.6))/2);
+reg(wellMesh, 'nwell', 'well');
+
+// ---------- ACTIVE / DIFFUSION ----------
+// Source and drain are diffused directly against the gate boundary (no gap)
+// and recessed into the well/substrate surface, not perched on top of it.
+function buildActiveRow(zc, srcColorVar, idPrefix, layerKey, dopingHex){
+  var actH = Y.actTop-Y.actBot;
+  var src = box(SRC_X1-SRC_X0, actH, ACTIVE_W, srcColorVar, { roughness:0.45, doping:true, dopingStrength:1, outlineColor:dopingHex });
+  put(src, SRC_X, (Y.actTop+Y.actBot)/2, zc);
+  reg(src, idPrefix+'Src', layerKey);
+
+  var gateSeg = box(CH.max-CH.min, actH*0.7, ACTIVE_W, srcColorVar, { roughness:0.5, opacity:0.5, transparent:true, outline:false });
+  put(gateSeg, 0, (Y.actTop+Y.actBot)/2 - actH*0.15, zc);
+  gateSeg.userData.decorative = true;
+  groups[layerKey].add(gateSeg);
+
+  var drn = box(DRN_X1-DRN_X0, actH, ACTIVE_W, srcColorVar, { roughness:0.45, doping:true, dopingStrength:1, outlineColor:dopingHex });
+  put(drn, DRN_X, (Y.actTop+Y.actBot)/2, zc);
+  reg(drn, idPrefix+'Drn', layerKey);
+
+  return { src:src, drn:drn };
+}
+var pmosAct = buildActiveRow(PMOS_ZC, '--c-active-p', 'pmos', 'active', '#f0b877');
+var nmosAct = buildActiveRow(NMOS_ZC, '--c-active-n', 'nmos', 'active', '#7fc3ec');
+
+// well tap / substrate tap diffusion pads — close to their row, not off in a far corner
+var wellTapPad = box(1.3, Y.actTop-Y.actBot, 1.3, '--c-well', { roughness:0.5, doping:true, dopingStrength:0.9, outlineColor:'#8fe6c8' });
+put(wellTapPad, TAP_X, (Y.actTop+Y.actBot)/2, PMOS_ZC);
+reg(wellTapPad, 'welltapAct', 'active');
+
+var subTapPad = box(1.3, Y.actTop-Y.actBot, 1.3, '--c-substrate', { roughness:0.5, doping:true, dopingStrength:0.9, outlineColor:'#aab4c2' });
+put(subTapPad, TAP_X, (Y.actTop+Y.actBot)/2, NMOS_ZC);
+reg(subTapPad, 'subtapAct', 'active');
+
+// ---------- GATE OXIDE ----------
+// Present only where poly actually overlaps each active region — i.e. only
+// directly under the two gates — never a full-length strip like poly itself.
+var oxidePmos = box(CH.max-CH.min, Y.oxideTop-Y.oxideBot, ACTIVE_W, '--c-oxide', { roughness:0.15, metalness:0.0, transparent:true, opacity:0.85, outline:false });
+put(oxidePmos, 0, (Y.oxideTop+Y.oxideBot)/2, PMOS_ZC);
+reg(oxidePmos, 'pmosOxide', 'oxide');
+
+var oxideNmos = box(CH.max-CH.min, Y.oxideTop-Y.oxideBot, ACTIVE_W, '--c-oxide', { roughness:0.15, metalness:0.0, transparent:true, opacity:0.85, outline:false });
+put(oxideNmos, 0, (Y.oxideTop+Y.oxideBot)/2, NMOS_ZC);
+reg(oxideNmos, 'nmosOxide', 'oxide');
+
+// ---------- POLYSILICON (single continuous strip) ----------
+// One straight strip flush across the NMOS band, the gap, and the PMOS
+// band — plus a short tail (never over active silicon) that lands the one
+// external gate contact.
+var polyMesh = box(CH.max-CH.min, Y.polyTop-Y.polyBot, POLY_Z1-POLY_Z0, '--c-poly', { roughness:0.45, metalness:0.2 });
+put(polyMesh, 0, (Y.polyTop+Y.polyBot)/2, (POLY_Z0+POLY_Z1)/2);
+reg(polyMesh, 'poly', 'poly');
+
+// ---------- CONTACTS ----------
+function contactAt(x, z, topOfLower, id){
+  var h = Y.metalBot - topOfLower;
+  var c = box(0.42, h, 0.42, '--c-contact', { roughness:0.3, metalness:0.6, noShadow:true });
+  put(c, x, topOfLower + h/2, z);
+  reg(c, id, 'contact');
+  return c;
+}
+contactAt(SRC_X, PMOS_ZC, Y.actTop, 'pmosSrcCt');
+contactAt(DRN_X, PMOS_ZC, Y.actTop, 'pmosDrnCt');
+contactAt(SRC_X, NMOS_ZC, Y.actTop, 'nmosSrcCt');
+contactAt(DRN_X, NMOS_ZC, Y.actTop, 'nmosDrnCt');
+contactAt(0, POLY_CT_Z, Y.polyTop, 'polyCt');
+contactAt(TAP_X, PMOS_ZC, Y.actTop, 'welltapCt');
+contactAt(TAP_X, NMOS_ZC, Y.actTop, 'subtapCt');
+
+// ---------- METAL-1 ----------
+// Every wire below is checked to stay clear of every OTHER Metal-1 wire's
+// footprint (same layer = must not overlap). VDD/GND rails sit outside the
+// poly tail's z-range entirely, so IN never runs through the VDD rail the
+// way it used to.
+var metalH = Y.metalTop-Y.metalBot;
+var midY = (Y.metalTop+Y.metalBot)/2;
+
+function metalBar(x0,x1,z0,z1, colorVar, id){
+  var w = Math.abs(x1-x0) || 0.42, d = Math.abs(z1-z0) || 0.42;
+  var m = box(Math.max(w,0.42), metalH, Math.max(d,0.42), colorVar, { roughness:0.35, metalness:0.55 });
+  put(m, (x0+x1)/2, midY, (z0+z1)/2);
+  reg(m, id, 'metal');
+  return m;
+}
+
+// VDD rail + stubs (rail sits beyond the poly/IN tail — see RAIL_Z above)
+metalBar(-9, 9, RAIL_Z, RAIL_Z, '--c-vdd', 'vddRail');
+metalBar(SRC_X, SRC_X, PMOS_ZC, RAIL_Z, '--c-vdd', 'vddStubPmos');
+metalBar(TAP_X, TAP_X, PMOS_ZC, RAIL_Z, '--c-vdd', 'vddStubTap');
+
+// GND rail + stubs
+metalBar(-9, 9, -RAIL_Z, -RAIL_Z, '--c-gnd', 'gndRail');
+metalBar(SRC_X, SRC_X, NMOS_ZC, -RAIL_Z, '--c-gnd', 'gndStubNmos');
+metalBar(TAP_X, TAP_X, NMOS_ZC, -RAIL_Z, '--c-gnd', 'gndStubTap');
+
+// OUT: connects pmos drain <-> nmos drain through the gap between the two
+// rows, plus a short pin stub sideways in X (clear of both rails and IN)
+metalBar(DRN_X, DRN_X, PMOS_ZC, NMOS_ZC, '--c-out', 'outSpine');
+metalBar(DRN_X, DRN_X+3.5, 0, 0, '--c-out', 'outPin');
+
+// IN: straight up from the poly's field contact, short pin sideways in Z —
+// stops well short of the VDD rail (RAIL_Z), so it never overlaps it.
+metalBar(0, 0, POLY_CT_Z, POLY_CT_Z+0.9, '--c-in', 'inPin');
+
+// =====================================================================
+// LABELS
+// =====================================================================
+// Each label is parented into the SAME group as the geometry it names, so
+// when a layer is exploded (or hidden) the label rides along with it instead
+// of staying pinned in space.
+function addLabel(text, x,y,z, colorHex, groupKey){
+  var s = makeLabel(text, colorHex);
+  s.position.set(x,y,z);
+  s.userData.isLabel = true;
+  groups[groupKey].add(s);
+  return s;
+}
+addLabel('VDD', -9, Y.metalTop+0.6, RAIL_Z, '#e35d5d', 'metal');
+addLabel('PMOS', SRC_X-1.2, Y.actTop+0.9, PMOS_ZC, '#cf8a4a', 'active');
+addLabel('N-WELL', 5.0, Y.wellTop+0.5, PMOS_ZC, '#3f8f6f', 'well');
+addLabel('POLY GATE', 0, Y.polyTop+0.7, 0, '#d8503c', 'poly');
+addLabel('GATE OXIDE', 1.9, Y.oxideTop+0.35, PMOS_ZC, '#8fc9dc', 'oxide');
+addLabel('IN', 0, Y.metalTop+0.6, POLY_CT_Z+1.1, '#e6c94a', 'metal');
+addLabel('OUT', DRN_X+3.6, Y.metalTop+0.6, 0, '#57cf8f', 'metal');
+addLabel('NMOS', SRC_X-1.2, Y.actTop+0.9, NMOS_ZC, '#4a92c9', 'active');
+addLabel('P-SUBSTRATE', 9.5, Y.subTop+0.4, -8.0, '#9aa6b6', 'substrate');
+addLabel('GND', -9, Y.metalTop+0.6, -RAIL_Z, '#9aa6b6', 'metal');
+
+// =====================================================================
+// ARCHITECTURE TREE DATA  (section 18)
+// =====================================================================
+var TREE = [
+  { label:'CMOS INVERTER', children:[
+    { label:'SUBSTRATE', children:[ { label:'P-SUBSTRATE', id:'psub' } ] },
+    { label:'WELL', children:[ { label:'N-WELL', id:'nwell' } ] },
+    { label:'TRANSISTORS', children:[
+      { label:'PMOS', id:'pmos', children:[
+        { label:'SOURCE', id:'pmosSrc' }, { label:'GATE', id:'poly' }, { label:'DRAIN', id:'pmosDrn' }
+      ]},
+      { label:'NMOS', id:'nmos', children:[
+        { label:'SOURCE', id:'nmosSrc' }, { label:'GATE', id:'poly' }, { label:'DRAIN', id:'nmosDrn' }
+      ]}
+    ]},
+    { label:'POLYSILICON', children:[ { label:'COMMON GATE', id:'poly' } ] },
+    { label:'GATE OXIDE', children:[ { label:'PMOS OXIDE', id:'pmosOxide' }, { label:'NMOS OXIDE', id:'nmosOxide' } ] },
+    { label:'CONTACTS', id:'pmosSrcCt', children:[
+      { label:'PMOS SRC CT', id:'pmosSrcCt' }, { label:'PMOS DRN CT', id:'pmosDrnCt' },
+      { label:'NMOS SRC CT', id:'nmosSrcCt' }, { label:'NMOS DRN CT', id:'nmosDrnCt' },
+      { label:'POLY / IN CT', id:'polyCt' }
+    ]},
+    { label:'METAL-1', children:[
+      { label:'VDD', id:'vddRail' }, { label:'GND', id:'gndRail' },
+      { label:'IN', id:'inPin' }, { label:'OUT', id:'outPin' }
+    ]}
+  ]}
+];
+
+// virtual (non-mesh) ids resolve to an aggregate info + representative mesh(es) to highlight
+var VIRTUAL = {
+  pmos: { info:'pmos', meshes:['pmosSrc','pmosDrn','poly'] },
+  nmos: { info:'nmos', meshes:['nmosSrc','nmosDrn','poly'] }
+};
+
+function idToInfo(id){
+  if (INFO[id]) return INFO[id];
+  var map = { pmosSrc:'actP', pmosDrn:'actP', nmosSrc:'actN', nmosDrn:'actN',
+    pmosOxide:'oxide', nmosOxide:'oxide',
+    pmosSrcCt:'contact', pmosDrnCt:'contact', nmosSrcCt:'contact', nmosDrnCt:'contact', polyCt:'contact',
+    welltapCt:'welltap', subtapCt:'subtap', welltapAct:'welltap', subtapAct:'subtap',
+    vddRail:'vdd', vddStubPmos:'vdd', vddStubTap:'vdd', gndRail:'gnd', gndStubNmos:'gnd', gndStubTap:'gnd',
+    inPin:'inNet', outPin:'outNet', outSpine:'outNet', poly:'poly', nwell:'nwell', psub:'psub' };
+  return INFO[map[id]] || null;
+}
+
+function meshesForId(id){
+  if (VIRTUAL[id]) return VIRTUAL[id].meshes.map(findMesh).filter(Boolean);
+  var m = findMesh(id);
+  return m ? [m] : [];
+}
+function findMesh(id){
+  for (var i=0;i<selectable.length;i++){ if (selectable[i].userData.id === id) return selectable[i]; }
+  return null;
+}
+
+// build tree DOM
+var treeRoot = document.getElementById('tree');
+function renderTree(nodes, depth){
+  var ul = document.createElement('ul');
+  nodes.forEach(function(n){
+    var li = document.createElement('li');
+    var row = document.createElement('div');
+    row.className = 'node';
+    row.dataset.id = n.id || '';
+    var bullet = n.children ? '▸' : '·';
+    row.innerHTML = '<span class="bullet">'+bullet+'</span><span>'+n.label+'</span>';
+    if (n.id){
+      row.addEventListener('click', function(e){ e.stopPropagation(); selectById(n.id); });
+    }
+    li.appendChild(row);
+    if (n.children) li.appendChild(renderTree(n.children, depth+1));
+    ul.appendChild(li);
+  });
+  return ul;
+}
+treeRoot.appendChild(renderTree(TREE, 0));
+
+// =====================================================================
+// LAYER PANEL + LEGEND PANEL
+// =====================================================================
+var layerMeta = [
+  { key:'substrate', name:'SUBSTRATE', color:'var(--c-substrate)' },
+  { key:'well', name:'N-WELL', color:'var(--c-well)' },
+  { key:'active', name:'ACTIVE / DIFFUSION', color:'var(--c-active-p)' },
+  { key:'oxide', name:'GATE OXIDE', color:'var(--c-oxide)' },
+  { key:'poly', name:'POLYSILICON', color:'var(--c-poly)' },
+  { key:'contact', name:'CONTACT', color:'var(--c-contact)' },
+  { key:'metal', name:'METAL-1 (incl. VDD/GND/IN/OUT)', color:'var(--c-metal)' }
+];
+var layersBody = document.getElementById('layers-body');
+layerMeta.forEach(function(l){
+  var row = document.createElement('div');
+  row.className = 'layer-row';
+  row.innerHTML = '<input type="checkbox" checked data-layer="'+l.key+'"><span class="swatch" style="background:'+l.color+'"></span><label>'+l.name+'</label>';
+  layersBody.appendChild(row);
+  row.querySelector('input').addEventListener('change', function(e){
+    groups[l.key].visible = e.target.checked;
+  });
+  row.querySelector('label').addEventListener('click', function(){
+    var cb = row.querySelector('input'); cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change'));
+  });
+});
+
+var legendBody = document.getElementById('legend-body');
+LEGEND.forEach(function(l){
+  var div = document.createElement('div');
+  div.className = 'legend-item';
+  div.innerHTML = '<div class="lh"><span class="swatch" style="background:'+l.color+'"></span><b>'+l.name+'</b></div><p>'+l.desc+'</p>';
+  legendBody.appendChild(div);
+});
+
+// collapsible panel sections
+document.querySelectorAll('.panel-head').forEach(function(h){
+  h.addEventListener('click', function(){
+    var body = document.getElementById(h.dataset.target);
+    var chev = h.querySelector('.chev');
+    body.classList.toggle('hidden');
+    chev.classList.toggle('closed');
+  });
+});
+
+// =====================================================================
+// SELECTION / INSPECTOR
+// =====================================================================
+var selectedMeshes = [];
+var HIGHLIGHT_COLOR = new THREE.Color(cssVar('--highlight')); // bright magenta — kept far from the well's teal-green and every layer color so selection is unambiguous
+
+function clearSelection(){
+  selectedMeshes.forEach(function(m){
+    m.material.emissive.setHex(m.userData.baseEmissive);
+    m.material.emissiveIntensity = m.userData.baseEmissiveIntensity;
+  });
+  selectedMeshes = [];
+  document.querySelectorAll('#tree .node.selected').forEach(function(n){ n.classList.remove('selected'); });
+}
+
+function highlightMeshes(meshes){
+  clearSelection();
+  meshes.forEach(function(m){
+    m.material.emissive = HIGHLIGHT_COLOR.clone();
+    m.material.emissiveIntensity = 0.55;
+    selectedMeshes.push(m);
+  });
+}
+
+var lastSelectedId = null;
+
+function showInspector(id, info){
+  var el = document.getElementById('inspector');
+  if (!info){ el.innerHTML = '<div class="empty">No inspector data for this element.</div>'; return; }
+  el.innerHTML =
+    '<div class="title">'+info.title+'</div>'+
+    '<div class="field"><div class="k">FUNCTION</div><div class="v">'+info.fn+'</div></div>'+
+    '<div class="field"><div class="k">ELECTRICAL ROLE</div><div class="v">'+info.role+'</div></div>'+
+    '<div class="field"><div class="k">CONNECTION</div><div class="v">'+info.conn+'</div></div>'+
+    '<div class="field"><div class="k">PHYSICAL RELATIONSHIP</div><div class="v">'+info.rel+'</div></div>'+
+    (info.doping ? '<div class="field"><div class="k">DOPING CONCENTRATION</div><div class="v">'+info.doping+'</div></div>' : '') +
+    dimsHtmlForId(id);
+}
+
+function selectById(id){
+  var meshes = meshesForId(id);
+  if (!meshes.length) return;
+  lastSelectedId = id;
+  highlightMeshes(meshes);
+  showInspector(id, idToInfo(id));
+  document.getElementById('crumb-sel').textContent = '— ' + (idToInfo(id) ? idToInfo(id).title : id);
+  document.querySelectorAll('#tree .node').forEach(function(n){
+    if (n.dataset.id === id) n.classList.add('selected');
+  });
+}
+
+// raycaster click
+var raycaster = new THREE.Raycaster();
+var pointer = new THREE.Vector2();
+renderer.domElement.addEventListener('click', function(e){
+  var rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((e.clientX-rect.left)/rect.width)*2-1;
+  pointer.y = -((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(pointer, activeCamera);
+  var hits = raycaster.intersectObjects(selectable, false).filter(function(h){ return h.object.visible !== false && h.object.parent.visible; });
+  if (hits.length){
+    var m = hits[0].object;
+    selectById(m.userData.id);
+  }
+});
+
+// =====================================================================
+// EXPLODE
+// =====================================================================
+var explodeSlider = document.getElementById('explode-slider');
+var explodeVal = document.getElementById('explode-val');
+function applyExplode(pct){
+  var f = pct/100;
+  LAYER_ORDER.forEach(function(key, idx){
+    groups[key].position.y = idx * EXPLODE_GAP * f;
+  });
+  explodeVal.textContent = pct + '%';
+}
+explodeSlider.addEventListener('input', function(e){ applyExplode(parseInt(e.target.value,10)); });
+applyExplode(0);
+
+// =====================================================================
+// CROSS SECTION
+// =====================================================================
+var xsectionOn = false;
+var btnX = document.getElementById('btn-xsection');
+var xHud = document.getElementById('xsection-hud');
+var xInset = document.getElementById('xsection-inset');
+var xSlider = document.getElementById('xsection-slider');
+
+function setClip(){
+  var v = parseInt(xSlider.value,10)/100; // -7.5..7.5
+  clipPlane.constant = v;
+}
+xSlider.addEventListener('input', setClip);
+
+btnX.addEventListener('click', function(){
+  xsectionOn = !xsectionOn;
+  btnX.classList.toggle('active', xsectionOn);
+  xHud.classList.toggle('visible', xsectionOn);
+  xInset.classList.toggle('visible', xsectionOn);
+  renderer.clippingPlanes = xsectionOn ? [clipPlane] : [];
+  setClip();
+});
+
+// =====================================================================
+// DIMENSIONS / LAMBDA (λ) DESIGN RULES
+// =====================================================================
+var LAMBDA_PRESETS = [
+  { label:'λ = 1000 nm  (legacy 2 µm process)', nm:1000 },
+  { label:'λ = 350 nm  (0.35 µm process)', nm:350 },
+  { label:'λ = 130 nm  (0.13 µm process)', nm:130 },
+  { label:'λ = 90 nm', nm:90 },
+  { label:'λ = 45 nm', nm:45 },
+  { label:'λ = 16 nm  (illustrative, finFET-era)', nm:16 }
+];
+// Simplified Mead–Conway style λ-based design rules. Everything in the
+// physical model is expressed as a multiple of λ; the actual nm/µm figure
+// scales with whichever λ the user selects below. Rather than a separate
+// dimensions button/overlay, the relevant rule(s) are shown directly in the
+// inspector for whatever component is currently selected.
+var DIM_RULES = [
+  { key:'gateLength',   label:'Gate length (L)',            lambda:2 },
+  { key:'gateWidth',    label:'Gate width (W)',              lambda:6 },
+  { key:'sdLength',     label:'Source/Drain length',         lambda:3 },
+  { key:'contactSize',  label:'Contact size (via)',          lambda:2 },
+  { key:'wellOverlap',  label:'Well overlap of active',      lambda:6 },
+  { key:'metalWidth',   label:'Metal-1 width',               lambda:3 }
+];
+var currentLambdaNm = 90;
+
+function formatNm(valueNm){
+  if (valueNm >= 1000) return (valueNm/1000).toFixed(valueNm % 1000 === 0 ? 1 : 2) + ' \u00B5m';
+  return (Math.round(valueNm*100)/100) + ' nm';
+}
+
+var lambdaSelect = document.getElementById('lambda-select');
+LAMBDA_PRESETS.forEach(function(p, i){
+  var opt = document.createElement('option');
+  opt.value = p.nm; opt.textContent = p.label;
+  if (p.nm === currentLambdaNm) opt.selected = true;
+  lambdaSelect.appendChild(opt);
+});
+
+function dimValueNm(rule){ return rule.lambda * currentLambdaNm; }
+
+function renderDimsTable(){
+  var el = document.getElementById('dims-table');
+  el.innerHTML = DIM_RULES.map(function(r){
+    return '<div class="dims-table-row"><span class="k">'+r.label+' <span style="opacity:.55">('+r.lambda+'\u03BB)</span></span><span class="v">'+formatNm(dimValueNm(r))+'</span></div>';
+  }).join('');
+}
+renderDimsTable();
+
+// Which λ-rules apply to each clickable id — shown inline in the inspector
+// popup whenever that component is selected.
+var DIM_MAP = {
+  poly:['gateLength','gateWidth'], pmosOxide:['gateLength','gateWidth'], nmosOxide:['gateLength','gateWidth'],
+  pmos:['gateLength','gateWidth','sdLength'], nmos:['gateLength','gateWidth','sdLength'],
+  pmosSrc:['sdLength','gateWidth'], pmosDrn:['sdLength','gateWidth'], nmosSrc:['sdLength','gateWidth'], nmosDrn:['sdLength','gateWidth'],
+  pmosSrcCt:['contactSize'], pmosDrnCt:['contactSize'], nmosSrcCt:['contactSize'], nmosDrnCt:['contactSize'],
+  polyCt:['contactSize'], welltapCt:['contactSize'], subtapCt:['contactSize'],
+  vddRail:['metalWidth'], gndRail:['metalWidth'], inPin:['metalWidth'], outPin:['metalWidth'], outSpine:['metalWidth'],
+  vddStubPmos:['metalWidth'], vddStubTap:['metalWidth'], gndStubNmos:['metalWidth'], gndStubTap:['metalWidth'],
+  nwell:['wellOverlap'], welltapAct:['wellOverlap'], subtapAct:['wellOverlap']
+};
+function dimsHtmlForId(id){
+  var keys = DIM_MAP[id];
+  if (!keys || !keys.length) return '';
+  var rows = keys.map(function(k){
+    var rule = DIM_RULES.filter(function(r){ return r.key === k; })[0];
+    if (!rule) return '';
+    return '<div class="dims-table-row"><span class="k">'+rule.label+' <span style="opacity:.55">('+rule.lambda+'\u03BB)</span></span><span class="v">'+formatNm(dimValueNm(rule))+'</span></div>';
+  }).join('');
+  return '<div class="field"><div class="k">DIMENSIONS (\u03BB = '+formatNm(currentLambdaNm)+')</div><div class="v" style="margin-top:4px;">'+rows+'</div></div>';
+}
+
+lambdaSelect.addEventListener('change', function(e){
+  currentLambdaNm = parseFloat(e.target.value);
+  renderDimsTable();
+  if (lastSelectedId) showInspector(lastSelectedId, idToInfo(lastSelectedId));
+});
+
+// =====================================================================
+// PHYSICAL / SCHEMATIC MODE
+// =====================================================================
+var modeSeg = document.getElementById('mode-seg');
+var schematicOverlay = document.getElementById('schematic-overlay');
+
+function setViewMode(mode){
+  modeSeg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.mode === mode); });
+  schematicOverlay.classList.toggle('visible', mode === 'schematic');
+}
+modeSeg.addEventListener('click', function(e){
+  var btn = e.target.closest('button'); if (!btn) return;
+  setViewMode(btn.dataset.mode);
+});
+
+// Schematic components map onto the SAME ids used by the 3D model and the
+// architecture tree. Clicking a terminal, gate or net in the schematic jumps
+// back to the physical layout with that element highlighted, so the two
+// views stay legible as one shared netlist.
+schematicOverlay.querySelectorAll('[data-id]').forEach(function(el){
+  el.addEventListener('click', function(e){
+    e.stopPropagation();
+    var id = el.dataset.id;
+    setViewMode('layout');
+    selectById(id);
+  });
+});
+
+// =====================================================================
+// CAMERA CONTROLS (persp/ortho + reset)
+// =====================================================================
+var camSeg = document.getElementById('cam-seg');
+camSeg.addEventListener('click', function(e){
+  var btn = e.target.closest('button'); if (!btn) return;
+  camSeg.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  var wantOrtho = btn.dataset.cam === 'ortho';
+  var newCam = wantOrtho ? camOrtho : camPersp;
+  if (newCam === activeCamera) return;
+  newCam.position.copy(activeCamera.position);
+  activeCamera = newCam;
+  controls.object = activeCamera;
+  controls.update();
+  resize();
+});
+
+document.getElementById('btn-reset-cam').addEventListener('click', function(){
+  activeCamera.position.copy(INITIAL_POS);
+  controls.target.copy(INITIAL_TARGET);
+  controls.update();
+});
+
+// =====================================================================
+// SHOW CONNECTIONS — animated current / electron flow
+// =====================================================================
+// Only the transistor that is actually ON conducts, so only ONE path
+// (VDD→PMOS→OUT, or OUT→NMOS→GND) is animated at a time, matching real
+// inverter behavior for the selected IN value. A CURRENT/ELECTRONS toggle
+// flips the arrow direction: conventional current flows from + to -,
+// electrons physically move the opposite way.
+var connectionsOn = false;
+var flowMode = 'current'; // 'current' | 'electron'
+var btnConn = document.getElementById('btn-connections');
+var flowSeg = document.getElementById('flow-seg');
+var flowCaption = document.getElementById('flow-caption');
+var markerGroup = new THREE.Group(); scene.add(markerGroup);
+
+var PMOS_PATH_IDS = ['vddRail','vddStubPmos','pmosSrcCt','pmosSrc','pmosDrn','pmosDrnCt','outSpine'];
+var NMOS_PATH_IDS = ['outSpine','nmosDrnCt','nmosDrn','nmosSrc','nmosSrcCt','gndStubNmos','gndRail'];
+
+// Points given in the CONVENTIONAL CURRENT direction (source of charge → sink).
+var pmosCurve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(SRC_X, Y.metalTop-0.15, RAIL_Z),
+  new THREE.Vector3(SRC_X, Y.metalTop-0.15, PMOS_ZC),
+  new THREE.Vector3(SRC_X, Y.actTop+0.15, PMOS_ZC),
+  new THREE.Vector3(0,      Y.actTop+0.15, PMOS_ZC),
+  new THREE.Vector3(DRN_X, Y.actTop+0.15, PMOS_ZC),
+  new THREE.Vector3(DRN_X, Y.metalTop-0.15, PMOS_ZC),
+  new THREE.Vector3(DRN_X, Y.metalTop-0.15, 0)
+]);
+var nmosCurve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(DRN_X, Y.metalTop-0.15, 0),
+  new THREE.Vector3(DRN_X, Y.metalTop-0.15, NMOS_ZC),
+  new THREE.Vector3(DRN_X, Y.actTop+0.15, NMOS_ZC),
+  new THREE.Vector3(0,      Y.actTop+0.15, NMOS_ZC),
+  new THREE.Vector3(SRC_X, Y.actTop+0.15, NMOS_ZC),
+  new THREE.Vector3(SRC_X, Y.metalTop-0.15, NMOS_ZC),
+  new THREE.Vector3(SRC_X, Y.metalTop-0.15, -RAIL_Z)
+]);
+
+var N_MARKERS = 4;
+var flowMarkers = [];
+for (var fi=0; fi<N_MARKERS; fi++){
+  var coneGeo = new THREE.ConeGeometry(0.14, 0.34, 10);
+  var coneMat = new THREE.MeshStandardMaterial({ color:0xffcf4d, emissive:0xffcf4d, emissiveIntensity:0.9 });
+  var cone = new THREE.Mesh(coneGeo, coneMat);
+  cone.visible = false;
+  markerGroup.add(cone);
+  flowMarkers.push({ mesh:cone, t: fi / N_MARKERS });
+}
+
+function activePathIds(){ return currentIn === 0 ? PMOS_PATH_IDS : NMOS_PATH_IDS; }
+function activeCurve(){ return currentIn === 0 ? pmosCurve : nmosCurve; }
+
+function updateFlowCaption(){
+  if (!connectionsOn){ flowCaption.classList.remove('visible'); return; }
+  flowCaption.classList.add('visible');
+  var modeLabel = flowMode === 'current' ? 'CONVENTIONAL CURRENT' : 'ELECTRON FLOW';
+  var desc;
+  if (currentIn === 0){
+    desc = flowMode === 'current' ? 'VDD \u2192 PMOS \u2192 OUT' : 'OUT \u2192 PMOS \u2192 VDD';
+  } else {
+    desc = flowMode === 'current' ? 'OUT \u2192 NMOS \u2192 GND' : 'GND \u2192 NMOS \u2192 OUT';
+  }
+  flowCaption.textContent = modeLabel + ':  ' + desc;
+}
+
+function refreshConnections(){
+  // clear pulsing on everything, then re-arm only the active path
+  selectable.forEach(function(m){ m.userData.pulsing = false; });
+  if (connectionsOn){
+    activePathIds().forEach(function(id){
+      var m = findMesh(id);
+      if (m) m.userData.pulsing = true;
+    });
+  }
+  var col = flowMode === 'current' ? 0xffcf4d : 0x4fd1ff;
+  flowMarkers.forEach(function(fm){ fm.mesh.visible = connectionsOn; fm.mesh.material.color.setHex(col); fm.mesh.material.emissive.setHex(col); });
+  updateFlowCaption();
+}
+
+btnConn.addEventListener('click', function(){
+  connectionsOn = !connectionsOn;
+  btnConn.classList.toggle('active', connectionsOn);
+  refreshConnections();
+});
+
+flowSeg.addEventListener('click', function(e){
+  var btn = e.target.closest('button'); if (!btn) return;
+  flowSeg.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  flowMode = btn.dataset.flow === 'electron' ? 'electron' : 'current';
+  refreshConnections();
+});
+
+var UP_AXIS = new THREE.Vector3(0,1,0);
+function stepFlowMarkers(dt){
+  if (!connectionsOn) return;
+  var curve = activeCurve();
+  var reversed = flowMode === 'electron';
+  flowMarkers.forEach(function(fm){
+    fm.t += dt * 0.22;
+    if (fm.t > 1) fm.t -= 1;
+    var sampleT = reversed ? (1 - fm.t) : fm.t;
+    var p = curve.getPointAt(Math.min(Math.max(sampleT,0.0001),0.9999));
+    var tan = curve.getTangentAt(Math.min(Math.max(sampleT,0.0001),0.9999)).normalize();
+    if (reversed) tan.multiplyScalar(-1);
+    fm.mesh.position.copy(p);
+    var q = new THREE.Quaternion().setFromUnitVectors(UP_AXIS, tan);
+    fm.mesh.quaternion.copy(q);
+  });
+}
+
+// =====================================================================
+// IN = 0/1 LOGICAL STATE (section 16)
+// =====================================================================
+var currentIn = 0;
+var stateBadge = document.getElementById('state-badge');
+var inSeg = document.getElementById('in-seg');
+
+function applyLogicState(){
+  var pmosOn = currentIn === 0;
+  var nmosOn = currentIn === 1;
+  var out = currentIn === 0 ? 1 : 0;
+
+  document.getElementById('badge-in').textContent = currentIn;
+  document.getElementById('badge-pmos').textContent = pmosOn ? 'ON' : 'OFF';
+  document.getElementById('badge-pmos').className = 'v ' + (pmosOn ? 'on':'off');
+  document.getElementById('badge-nmos').textContent = nmosOn ? 'ON' : 'OFF';
+  document.getElementById('badge-nmos').className = 'v ' + (nmosOn ? 'on':'off');
+  document.getElementById('badge-out').textContent = out;
+  document.getElementById('badge-out').className = 'v ' + (out ? 'on':'off');
+
+  [pmosAct.src, pmosAct.drn].forEach(function(m){ setOnOffTint(m, pmosOn); });
+  [nmosAct.src, nmosAct.drn].forEach(function(m){ setOnOffTint(m, nmosOn); });
+}
+function setOnOffTint(mesh, on){
+  if (!connectionsOn && stateBadge.classList.contains('visible') === false) { /* still allow tint always */ }
+  mesh.userData.baseEmissive = on ? 0x2fbf7a : 0x3a1414;
+  mesh.userData.baseEmissiveIntensity = on ? 0.35 : 0.25;
+  if (selectedMeshes.indexOf(mesh) === -1){
+    mesh.material.emissive.setHex(mesh.userData.baseEmissive);
+    mesh.material.emissiveIntensity = mesh.userData.baseEmissiveIntensity;
+  }
+}
+
+inSeg.addEventListener('click', function(e){
+  var btn = e.target.closest('button'); if (!btn) return;
+  inSeg.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  currentIn = parseInt(btn.dataset.in,10);
+  stateBadge.classList.add('visible');
+  applyLogicState();
+  refreshConnections();
+});
+
+// =====================================================================
+// RENDER LOOP
+// =====================================================================
+var clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  var dt = clock.getDelta();
+  var t = clock.getElapsedTime();
+
+  if (connectionsOn){
+    stepFlowMarkers(dt);
+    selectable.forEach(function(m){
+      if (m.userData.pulsing){
+        var pulse = 0.35 + Math.abs(Math.sin(t*2.2))*0.35;
+        if (selectedMeshes.indexOf(m) === -1){
+          m.material.emissive.setHex(new THREE.Color(cssVar(layerColorOf(m))).getHex());
+          m.material.emissiveIntensity = pulse;
+        }
+      }
+    });
+  } else {
+    selectable.forEach(function(m){
+      if (m.userData.pulsing && selectedMeshes.indexOf(m) === -1){
+        m.material.emissive.setHex(m.userData.baseEmissive);
+        m.material.emissiveIntensity = m.userData.baseEmissiveIntensity;
+      }
+    });
+  }
+
+  controls.update();
+  renderer.render(scene, activeCamera);
+}
+function layerColorOf(m){
+  var id = m.userData.id;
+  if (id === 'inPin') return '--c-in';
+  if (id.indexOf('out') === 0 || id === 'outSpine') return '--c-out';
+  if (id.indexOf('vdd') === 0) return '--c-vdd';
+  if (id.indexOf('gnd') === 0) return '--c-gnd';
+  if (id.indexOf('Ct') !== -1) return '--c-contact';
+  if (id === 'pmosSrc' || id === 'pmosDrn') return '--c-active-p';
+  if (id === 'nmosSrc' || id === 'nmosDrn') return '--c-active-n';
+  return '--c-metal';
+}
+
+resize();
+applyLogicState();
+refreshConnections();
+requestAnimationFrame(function(){
+  document.getElementById('loading').style.display = 'none';
+});
+animate();
+
+})();
+</script>
+</body>
+</html>
