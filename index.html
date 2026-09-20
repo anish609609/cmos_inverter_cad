@@ -98,16 +98,18 @@
 
   /* ---------- Footer credit ---------- */
   #footer{
-    flex:0 0 auto; height:34px; display:flex; align-items:center; justify-content:center;
+    flex:0 0 auto; min-height:34px; display:flex; align-items:center; justify-content:center; gap:14px;
     background:var(--panel); border-top:1px solid var(--border);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px)) 10px; flex-wrap:wrap;
   }
   #footer a{
-    display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--text-dim);
+    display:flex; align-items:center; gap:7px; text-decoration:none; color:var(--text-dim);
     font-family:var(--mono); font-size:10.5px; letter-spacing:.03em; transition:color .15s;
   }
   #footer a:hover{ color:var(--accent); }
   #footer a:hover .credit-logo{ box-shadow:0 0 10px var(--accent); }
+  #footer .footer-sep{ width:1px; height:14px; background:var(--border); flex:0 0 auto; }
+  .gh-icon{ flex:0 0 auto; }
   .credit-logo{
     width:19px; height:19px; border-radius:50%; flex:0 0 auto;
     background:linear-gradient(135deg, var(--accent), #2c6f5f);
@@ -257,6 +259,15 @@
   #state-badge .v.off{ color:var(--danger); }
   #state-badge .disclaimer{ margin-top:6px; font-size:8.5px; color:var(--text-faint); max-width:180px; text-align:right; }
 
+  /* On small screens the state badge becomes a popover behind a compact
+     STATUS button instead of a permanently-visible corner box. */
+  #status-toggle{
+    display:none; top:14px; right:14px; pointer-events:auto;
+    font-family:var(--mono); font-size:10px; letter-spacing:.06em; font-weight:600;
+    background:var(--panel); border:1px solid var(--accent-dim); color:var(--accent);
+    border-radius:6px; padding:7px 12px; cursor:pointer;
+  }
+
   #view-hud{
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     right: calc(14px + env(safe-area-inset-right, 0px));
@@ -290,6 +301,10 @@
     #view-hud{ width:190px; right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); font-size:9px; }
     #note{ display:none; }
     #axis-indicator{ display:none; }
+    /* State badge collapses into a STATUS button and opens as a popover */
+    #status-toggle{ display:block; }
+    #state-badge.visible{ display:none; }
+    #state-badge.visible.mobile-open{ display:block; top:50px; }
   }
   @media (max-width: 520px){
     #view-hud{ max-width:52vw; }
@@ -466,6 +481,8 @@
         Vertical dimensions are exaggerated for visualization; this is a conceptual CMOS layout, not a fabrication-ready PDK layout. Dimensions, spacing and layer thicknesses are not design-rule compliant — topology and functional relationships are physically meaningful.
       </div>
 
+      <button class="hud interactive" id="status-toggle">STATUS</button>
+
       <div class="hud" id="state-badge">
         <div class="row"><span class="l">IN</span><span class="v" id="badge-in">0</span></div>
         <div class="row"><span class="l">PMOS</span><span class="v" id="badge-pmos">ON</span></div>
@@ -508,6 +525,13 @@
     <a id="credit-link" href="https://raydurg-anish-portfolio-amta50oot-anish609609s-projects.vercel.app/" target="_blank" rel="noopener noreferrer">
       <span class="credit-logo">RA</span>
       <span class="credit-text">Developed by Raydurg Anish</span>
+    </a>
+    <span class="footer-sep"></span>
+    <a id="github-link" href="https://github.com/anish609609/cmos_inverter_cad" target="_blank" rel="noopener noreferrer">
+      <svg class="gh-icon" viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+      </svg>
+      <span class="credit-text">GitHub</span>
     </a>
   </div>
 </div>
@@ -1177,9 +1201,17 @@ var DIM_RULES = [
   { key:'gateLength',   label:'Gate length (L)',            lambda:2 },
   { key:'gateWidth',    label:'Gate width (W)',              lambda:6 },
   { key:'sdLength',     label:'Source/Drain length',         lambda:3 },
-  { key:'contactSize',  label:'Contact size (via)',          lambda:2 },
+  { key:'contactSize',  label:'Contact size (via, W×D)',     lambda:2 },
   { key:'wellOverlap',  label:'Well overlap of active',      lambda:6 },
-  { key:'metalWidth',   label:'Metal-1 width',               lambda:3 }
+  { key:'metalWidth',   label:'Metal-1 width',               lambda:3 },
+  // vertical / thickness dimensions
+  { key:'substrateDepth', label:'Substrate thickness', note:'Exaggerated for display — real dies run hundreds of µm thick; not modeled to scale here.' },
+  { key:'wellDepth',     label:'N-well depth',                lambda:8 },
+  { key:'activeDepth',   label:'Source/Drain junction depth', lambda:1.5 },
+  { key:'oxideThickness',label:'Gate oxide thickness (tOX)',  note:'~2 nm equivalent, illustrative — exaggerated in the model for visibility.' },
+  { key:'polyThickness', label:'Poly gate height',            lambda:3 },
+  { key:'metalThickness',label:'Metal-1 thickness',           lambda:3 },
+  { key:'contactHeight', label:'Contact / via height',        lambda:4 }
 ];
 var currentLambdaNm = 90;
 
@@ -1198,33 +1230,44 @@ LAMBDA_PRESETS.forEach(function(p, i){
 
 function dimValueNm(rule){ return rule.lambda * currentLambdaNm; }
 
+function renderDimRow(rule){
+  if (rule.note){
+    return '<div class="dims-table-row" style="display:block;">'+
+      '<span class="k">'+rule.label+'</span>'+
+      '<div class="v" style="margin-top:3px; font-weight:400; font-size:9.5px; line-height:1.5; opacity:.85;">'+rule.note+'</div></div>';
+  }
+  return '<div class="dims-table-row"><span class="k">'+rule.label+' <span style="opacity:.55">('+rule.lambda+'\u03BB)</span></span><span class="v">'+formatNm(dimValueNm(rule))+'</span></div>';
+}
+
 function renderDimsTable(){
   var el = document.getElementById('dims-table');
-  el.innerHTML = DIM_RULES.map(function(r){
-    return '<div class="dims-table-row"><span class="k">'+r.label+' <span style="opacity:.55">('+r.lambda+'\u03BB)</span></span><span class="v">'+formatNm(dimValueNm(r))+'</span></div>';
-  }).join('');
+  el.innerHTML = DIM_RULES.map(renderDimRow).join('');
 }
 renderDimsTable();
 
 // Which λ-rules apply to each clickable id — shown inline in the inspector
 // popup whenever that component is selected.
 var DIM_MAP = {
-  poly:['gateLength','gateWidth'], pmosOxide:['gateLength','gateWidth'], nmosOxide:['gateLength','gateWidth'],
-  pmos:['gateLength','gateWidth','sdLength'], nmos:['gateLength','gateWidth','sdLength'],
-  pmosSrc:['sdLength','gateWidth'], pmosDrn:['sdLength','gateWidth'], nmosSrc:['sdLength','gateWidth'], nmosDrn:['sdLength','gateWidth'],
-  pmosSrcCt:['contactSize'], pmosDrnCt:['contactSize'], nmosSrcCt:['contactSize'], nmosDrnCt:['contactSize'],
-  polyCt:['contactSize'], welltapCt:['contactSize'], subtapCt:['contactSize'],
-  vddRail:['metalWidth'], gndRail:['metalWidth'], inPin:['metalWidth'], outPin:['metalWidth'], outSpine:['metalWidth'],
-  vddStubPmos:['metalWidth'], vddStubTap:['metalWidth'], gndStubNmos:['metalWidth'], gndStubTap:['metalWidth'],
-  nwell:['wellOverlap'], welltapAct:['wellOverlap'], subtapAct:['wellOverlap']
+  poly:['gateLength','gateWidth','polyThickness'], pmosOxide:['oxideThickness'], nmosOxide:['oxideThickness'],
+  pmos:['gateLength','gateWidth','sdLength','polyThickness'], nmos:['gateLength','gateWidth','sdLength','polyThickness'],
+  pmosSrc:['sdLength','gateWidth','activeDepth'], pmosDrn:['sdLength','gateWidth','activeDepth'],
+  nmosSrc:['sdLength','gateWidth','activeDepth'], nmosDrn:['sdLength','gateWidth','activeDepth'],
+  pmosSrcCt:['contactSize','contactHeight'], pmosDrnCt:['contactSize','contactHeight'],
+  nmosSrcCt:['contactSize','contactHeight'], nmosDrnCt:['contactSize','contactHeight'],
+  polyCt:['contactSize','contactHeight'], welltapCt:['contactSize','contactHeight'], subtapCt:['contactSize','contactHeight'],
+  vddRail:['metalWidth','metalThickness'], gndRail:['metalWidth','metalThickness'], inPin:['metalWidth','metalThickness'],
+  outPin:['metalWidth','metalThickness'], outSpine:['metalWidth','metalThickness'],
+  vddStubPmos:['metalWidth','metalThickness'], vddStubTap:['metalWidth','metalThickness'],
+  gndStubNmos:['metalWidth','metalThickness'], gndStubTap:['metalWidth','metalThickness'],
+  nwell:['wellOverlap','wellDepth'], welltapAct:['wellOverlap'], subtapAct:['wellOverlap'],
+  psub:['substrateDepth']
 };
 function dimsHtmlForId(id){
   var keys = DIM_MAP[id];
   if (!keys || !keys.length) return '';
   var rows = keys.map(function(k){
     var rule = DIM_RULES.filter(function(r){ return r.key === k; })[0];
-    if (!rule) return '';
-    return '<div class="dims-table-row"><span class="k">'+rule.label+' <span style="opacity:.55">('+rule.lambda+'\u03BB)</span></span><span class="v">'+formatNm(dimValueNm(rule))+'</span></div>';
+    return rule ? renderDimRow(rule) : '';
   }).join('');
   return '<div class="field"><div class="k">DIMENSIONS (\u03BB = '+formatNm(currentLambdaNm)+')</div><div class="v" style="margin-top:4px;">'+rows+'</div></div>';
 }
@@ -1481,6 +1524,24 @@ leftToggleBtn.addEventListener('click', function(){
 rightToggleBtn.addEventListener('click', function(){
   var open = rightPanel.classList.toggle('open');
   rightToggleBtn.textContent = open ? '\u203A' : '\u2039';
+  updateViewHudPosition();
+});
+
+// Keep the Explode/Section-Scrub HUD clear of the right drawer instead of
+// letting the drawer cover it — slide it left by the drawer's actual width.
+var viewHud = document.getElementById('view-hud');
+function updateViewHudPosition(){
+  if (rightPanel.classList.contains('open')){
+    var w = rightPanel.getBoundingClientRect().width;
+    viewHud.style.right = (w + 14) + 'px';
+  } else {
+    viewHud.style.right = '';
+  }
+}
+window.addEventListener('resize', updateViewHudPosition);
+
+document.getElementById('status-toggle').addEventListener('click', function(){
+  stateBadge.classList.toggle('mobile-open');
 });
 
 // =====================================================================
