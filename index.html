@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CMOS Inverter — Physical Layout Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<link rel="stylesheet" href="css/style.css">
+
+</head>
+<body>
+
+<div id="loading"><div class="spin"></div><div>INITIALIZING VIEWPORT…</div></div>
+
+<div id="app">
+
+  <div id="topbar">
+    <div class="brand"><span class="dot"></span><b>CMOS·VIEWER</b><span>inverter / rev 01</span></div>
+
+    <div class="seg" id="mode-seg">
+      <button data-mode="layout" class="active">PHYSICAL LAYOUT</button>
+      <button data-mode="schematic">SCHEMATIC</button>
+    </div>
+
+    <div class="in-toggle">
+      IN =
+      <div class="seg" id="in-seg">
+        <button data-in="0" class="active">0</button>
+        <button data-in="1">1</button>
+      </div>
+    </div>
+    <div class="seg" id="flow-seg" title="Direction convention for the animated flow markers on whichever transistor is ON">
+      <button data-flow="current" class="active">CURRENT</button>
+      <button data-flow="electron">ELECTRONS</button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="right-cluster">
+      <button class="tbtn" id="btn-reset-cam">RESET</button>
+    </div>
+  </div>
+
+  <div id="body-row">
+
+    <button class="panel-toggle" id="left-toggle" title="Layers &amp; legend" aria-label="Toggle layers panel">
+      <svg viewBox="0 0 6 20" width="6" height="20" aria-hidden="true"><circle cx="3" cy="3" r="2.4"/><circle cx="3" cy="10" r="2.4"/><circle cx="3" cy="17" r="2.4"/></svg>
+    </button>
+    <button class="panel-toggle" id="right-toggle" title="Inspector &amp; tree" aria-label="Toggle inspector panel">
+      <svg viewBox="0 0 6 20" width="6" height="20" aria-hidden="true"><circle cx="3" cy="3" r="2.4"/><circle cx="3" cy="10" r="2.4"/><circle cx="3" cy="17" r="2.4"/></svg>
+    </button>
+
+    <div id="left-panel">
+      <div class="panel-section">
+        <div class="panel-head" data-target="layers-body"><h3>LAYER VISIBILITY</h3><span class="chev">▾</span></div>
+        <div class="panel-body" id="layers-body"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-head" data-target="legend-body"><h3>LAYER LEGEND</h3><span class="chev">▾</span></div>
+        <div class="panel-body" id="legend-body"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-head" data-target="dims-body"><h3>DIMENSIONS (λ RULES)</h3><span class="chev">▾</span></div>
+        <div class="panel-body" id="dims-body">
+          <div class="dims-row-select">
+            <label for="lambda-select" class="dims-lbl">λ (LAMBDA)</label>
+            <select id="lambda-select"></select>
+          </div>
+          <div id="dims-table"></div>
+          <p class="dims-note">λ-scaled Mead–Conway style rules, illustrative only — not a specific fabricated PDK. Click any component in the 3D view (or the schematic, or the tree) to see its own dimensions in the Property Inspector.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewport-wrap">
+      <div id="canvas-host"></div>
+
+      <div id="schematic-overlay">
+        <svg viewBox="0 0 360 460" xmlns="http://www.w3.org/2000/svg" fill="none">
+
+          <!-- VDD -->
+          <g class="sch-el" data-id="vddRail">
+            <rect x="150" y="6" width="60" height="70" fill="transparent"/>
+            <text x="180" y="18" fill="#e35d5d" font-family="IBM Plex Mono" font-size="13" text-anchor="middle">VDD</text>
+            <line x1="180" y1="24" x2="180" y2="70" stroke="#e35d5d" stroke-width="2.5"/>
+            <circle cx="180" cy="70" r="3" fill="#e35d5d"/>
+          </g>
+
+          <!-- PMOS transistor symbol: source(top,VDD) / gate(left, bubble = P-channel) / drain(bottom,OUT) -->
+          <g class="sch-el" data-id="pmosSrc">
+            <rect x="160" y="66" width="40" height="16" fill="transparent"/>
+            <line x1="180" y1="70" x2="180" y2="95" stroke="#cf8a4a" stroke-width="2.5"/>
+          </g>
+          <g class="sch-el" data-id="pmos">
+            <rect x="105" y="90" width="110" height="55" fill="transparent"/>
+            <line x1="165" y1="95" x2="165" y2="135" stroke="#cf8a4a" stroke-width="2.5"/>
+            <line x1="180" y1="95" x2="180" y2="105" stroke="#cf8a4a" stroke-width="2.5"/>
+            <line x1="180" y1="110" x2="180" y2="120" stroke="#cf8a4a" stroke-width="2.5"/>
+            <line x1="180" y1="125" x2="180" y2="135" stroke="#cf8a4a" stroke-width="2.5"/>
+            <line x1="130" y1="115" x2="146" y2="115" stroke="#e6c94a" stroke-width="2.5"/>
+            <circle cx="153" cy="115" r="4.5" fill="none" stroke="#e6c94a" stroke-width="2"/>
+            <circle cx="180" cy="70" r="0" fill="none"/>
+            <text x="222" y="119" fill="#cf8a4a" font-family="IBM Plex Mono" font-size="12" text-anchor="start">PMOS</text>
+            <text x="222" y="132" fill="#8a95a6" font-family="IBM Plex Mono" font-size="8" text-anchor="start">(N-well body)</text>
+          </g>
+          <g class="sch-el" data-id="pmosDrn">
+            <rect x="160" y="129" width="40" height="16" fill="transparent"/>
+            <line x1="180" y1="135" x2="180" y2="150" stroke="#cf8a4a" stroke-width="2.5"/>
+          </g>
+
+          <!-- OUT node -->
+          <g class="sch-el" data-id="outPin">
+            <rect x="150" y="144" width="140" height="42" fill="transparent"/>
+            <line x1="180" y1="150" x2="180" y2="205" stroke="#57cf8f" stroke-width="2.5"/>
+            <circle cx="180" cy="177" r="3.5" fill="#57cf8f"/>
+            <line x1="180" y1="177" x2="270" y2="177" stroke="#57cf8f" stroke-width="2.5"/>
+            <text x="278" y="181" fill="#57cf8f" font-family="IBM Plex Mono" font-size="13" text-anchor="start">OUT</text>
+          </g>
+
+          <!-- NMOS transistor symbol: drain(top,OUT) / gate(left, no bubble = N-channel) / source(bottom,GND) -->
+          <g class="sch-el" data-id="nmosDrn">
+            <rect x="160" y="196" width="40" height="16" fill="transparent"/>
+            <line x1="180" y1="205" x2="180" y2="225" stroke="#4a92c9" stroke-width="2.5"/>
+          </g>
+          <g class="sch-el" data-id="nmos">
+            <rect x="105" y="220" width="110" height="55" fill="transparent"/>
+            <line x1="165" y1="225" x2="165" y2="265" stroke="#4a92c9" stroke-width="2.5"/>
+            <line x1="180" y1="225" x2="180" y2="235" stroke="#4a92c9" stroke-width="2.5"/>
+            <line x1="180" y1="240" x2="180" y2="250" stroke="#4a92c9" stroke-width="2.5"/>
+            <line x1="180" y1="255" x2="180" y2="265" stroke="#4a92c9" stroke-width="2.5"/>
+            <line x1="130" y1="245" x2="165" y2="245" stroke="#e6c94a" stroke-width="2.5"/>
+            <text x="222" y="249" fill="#4a92c9" font-family="IBM Plex Mono" font-size="12" text-anchor="start">NMOS</text>
+            <text x="222" y="262" fill="#8a95a6" font-family="IBM Plex Mono" font-size="8" text-anchor="start">(P-substrate body)</text>
+          </g>
+          <g class="sch-el" data-id="nmosSrc">
+            <rect x="160" y="259" width="40" height="16" fill="transparent"/>
+            <line x1="180" y1="265" x2="180" y2="280" stroke="#4a92c9" stroke-width="2.5"/>
+          </g>
+
+          <!-- GND -->
+          <g class="sch-el" data-id="gndRail">
+            <rect x="150" y="278" width="60" height="55" fill="transparent"/>
+            <line x1="180" y1="280" x2="180" y2="312" stroke="#9aa6b6" stroke-width="2.5"/>
+            <line x1="164" y1="312" x2="196" y2="312" stroke="#9aa6b6" stroke-width="2.5"/>
+            <line x1="170" y1="318" x2="190" y2="318" stroke="#9aa6b6" stroke-width="2"/>
+            <line x1="176" y1="323" x2="184" y2="323" stroke="#9aa6b6" stroke-width="1.5"/>
+            <text x="180" y="342" fill="#9aa6b6" font-family="IBM Plex Mono" font-size="13" text-anchor="middle">GND</text>
+          </g>
+
+          <!-- IN: common gate bus -->
+          <g class="sch-el" data-id="inPin">
+            <rect x="35" y="105" width="100" height="150" fill="transparent"/>
+            <line x1="130" y1="115" x2="100" y2="115" stroke="#e6c94a" stroke-width="2.5"/>
+            <line x1="100" y1="115" x2="100" y2="245" stroke="#e6c94a" stroke-width="2.5"/>
+            <line x1="100" y1="245" x2="130" y2="245" stroke="#e6c94a" stroke-width="2.5"/>
+            <line x1="100" y1="180" x2="55" y2="180" stroke="#e6c94a" stroke-width="2.5"/>
+            <circle cx="55" cy="180" r="3.5" fill="#e6c94a"/>
+            <text x="45" y="184" fill="#e6c94a" font-family="IBM Plex Mono" font-size="13" text-anchor="end">IN</text>
+          </g>
+
+          <text x="180" y="30" fill="none" font-size="0">.</text>
+        </svg>
+        <div class="cap">CMOS INVERTER — SCHEMATIC · click any terminal, gate or net to locate it in the 3D layout · bubble on gate = PMOS (P-channel)</div>
+      </div>
+
+      <div id="popover">
+        <div class="pop-card">
+          <button class="pop-close" id="pop-close" aria-label="Close">×</button>
+          <div id="popover-content"></div>
+        </div>
+        <div class="pop-arrow"></div>
+      </div>
+
+      <div class="hud" id="axis-indicator">
+        <div><b>X</b> — source · drain axis</div>
+        <div><b>Y</b> — process layer stack</div>
+        <div><b>Z</b> — PMOS (N‑well) / NMOS (substrate)</div>
+      </div>
+
+      <div class="hud" id="crumb">CMOS INVERTER <span id="crumb-sel"></span></div>
+
+      <div class="hud" id="flow-caption"></div>
+
+      <div class="hud" id="note">
+        Vertical dimensions are exaggerated for visualization; this is a conceptual CMOS layout, not a fabrication-ready PDK layout. Dimensions, spacing and layer thicknesses are not design-rule compliant — topology and functional relationships are physically meaningful.
+      </div>
+
+      <button class="hud interactive" id="status-toggle">STATUS</button>
+
+      <div class="hud" id="state-badge">
+        <div class="row"><span class="l">IN</span><span class="v" id="badge-in">0</span></div>
+        <div class="row"><span class="l">PMOS</span><span class="v" id="badge-pmos">ON</span></div>
+        <div class="row"><span class="l">NMOS</span><span class="v" id="badge-nmos">OFF</span></div>
+        <div class="row"><span class="l">OUT</span><span class="v" id="badge-out">1</span></div>
+        <div class="disclaimer">Logical/behavioral visualization — not a transistor-level physical simulation.</div>
+      </div>
+
+      <div class="hud interactive" id="view-hud">
+        <div class="vh-title" id="view-hud-toggle"><span>VIEW CONTROLS</span><span class="chev" id="view-hud-chev">▾</span></div>
+        <div class="vh-body" id="view-hud-body">
+          <div class="vh-row"><label>EXPLODE LAYERS</label><span class="val" id="explode-val">1%</span></div>
+          <input type="range" id="explode-slider" min="0" max="100" value="1">
+          <div class="vh-sep"></div>
+          <div class="vh-row"><label>SCRUB X</label><span class="val" id="scrub-x-val">off</span></div>
+          <input type="range" id="scrub-x-slider" min="-1250" max="1250" value="1250">
+          <div class="vh-row"><label>SCRUB Y</label><span class="val" id="scrub-y-val">off</span></div>
+          <input type="range" id="scrub-y-slider" min="-100" max="2200" value="2200">
+          <div class="vh-row"><label>SCRUB Z</label><span class="val" id="scrub-z-val">off</span></div>
+          <input type="range" id="scrub-z-slider" min="-1500" max="1500" value="1500">
+        </div>
+      </div>
+
+    </div>
+
+    <div id="right-panel">
+      <div class="panel-section">
+        <div class="panel-head" data-target="inspector-body"><h3>PROPERTY INSPECTOR</h3><span class="chev">▾</span></div>
+        <div class="panel-body" id="inspector-body">
+          <div id="inspector"><div class="empty">Select a layer, region, or tree node to inspect its function, electrical role, and physical relationships.</div></div>
+        </div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-head" data-target="tree-body"><h3>ARCHITECTURE TREE</h3><span class="chev">▾</span></div>
+        <div class="panel-body" id="tree-body"><div id="tree"></div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="footer">
+    <a id="credit-link" href="https://raydurg-anish-portfolio-amta50oot-anish609609s-projects.vercel.app/" target="_blank" rel="noopener noreferrer">
+      <span class="credit-logo">RA</span>
+      <span class="credit-text">Developed by Raydurg Anish</span>
+    </a>
+    <span class="footer-sep"></span>
+    <a id="github-link" href="https://github.com/anish609609/cmos_inverter_cad" target="_blank" rel="noopener noreferrer">
+      <svg class="gh-icon" viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+      </svg>
+      <span class="credit-text">GitHub</span>
+    </a>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/geometry.js"></script>
+<script src="js/ui-panels.js"></script>
+<script src="js/selection.js"></script>
+<script src="js/controls-explode-scrub.js"></script>
+<script src="js/dimensions.js"></script>
+<script src="js/view-mode.js"></script>
+<script src="js/flow.js"></script>
+<script src="js/logic-state.js"></script>
+<script src="js/render-loop.js"></script>
+<script src="js/main.js"></script>
+
+</body>
+</html>
