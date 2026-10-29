@@ -25,6 +25,7 @@ var DIM_RULES = [
   { key:'sdLength',     label:'Source/Drain length',         lambda:3 },
   { key:'contactSize',  label:'Contact size (via, W×D)',     lambda:2 },
   { key:'wellOverlap',  label:'Well overlap of active',      lambda:6 },
+  { key:'wellSpacing',  label:'Well-to-well spacing',        lambda:10 },
   { key:'metalWidth',   label:'Metal-1 width',               lambda:3 },
   // vertical / thickness dimensions
   { key:'substrateDepth', label:'Substrate thickness', note:'Exaggerated for display — real dies run hundreds of µm thick; not modeled to scale here.' },
@@ -71,6 +72,7 @@ renderDimsTable();
 // popup whenever that component is selected.
 var DIM_MAP = {
   poly:['gateLength','gateWidth','polyThickness'], pmosOxide:['oxideThickness'], nmosOxide:['oxideThickness'],
+  pmosHighk:['oxideThickness'], nmosHighk:['oxideThickness'],
   pmos:['gateLength','gateWidth','sdLength','polyThickness'], nmos:['gateLength','gateWidth','sdLength','polyThickness'],
   pmosSrc:['sdLength','gateWidth','activeDepth'], pmosDrn:['sdLength','gateWidth','activeDepth'],
   nmosSrc:['sdLength','gateWidth','activeDepth'], nmosDrn:['sdLength','gateWidth','activeDepth'],
@@ -81,7 +83,7 @@ var DIM_MAP = {
   outPin:['metalWidth','metalThickness'], outSpine:['metalWidth','metalThickness'],
   vddStubPmos:['metalWidth','metalThickness'], vddStubTap:['metalWidth','metalThickness'],
   gndStubNmos:['metalWidth','metalThickness'], gndStubTap:['metalWidth','metalThickness'],
-  nwell:['wellOverlap','wellDepth'], welltapAct:['wellOverlap'], subtapAct:['wellOverlap'],
+  nwell:['wellOverlap','wellSpacing','wellDepth'], pwell:['wellOverlap','wellSpacing','wellDepth'], welltapAct:['wellOverlap'], subtapAct:['wellOverlap'],
   psub:['substrateDepth']
 };
 function dimsHtmlForId(id){
@@ -99,4 +101,3 @@ lambdaSelect.addEventListener('change', function(e){
   renderDimsTable();
   if (lastSelectedId) showInspector(lastSelectedId, idToInfo(lastSelectedId));
 });
-

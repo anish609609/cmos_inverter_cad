@@ -27,9 +27,10 @@ function applyLogicState(){
   [nmosAct.src, nmosAct.drn].forEach(function(m){ setOnOffTint(m, nmosOn); });
 }
 function setOnOffTint(mesh, on){
+  if (!mesh) return;
   mesh.userData.baseEmissive = on ? 0x2fbf7a : 0x3a1414;
   mesh.userData.baseEmissiveIntensity = on ? 0.35 : 0.25;
-  if (selectedMeshes.indexOf(mesh) === -1){
+  if (selectedMeshes.indexOf(mesh) === -1 && mesh.material && mesh.material.emissive){
     mesh.material.emissive.setHex(mesh.userData.baseEmissive);
     mesh.material.emissiveIntensity = mesh.userData.baseEmissiveIntensity;
   }
@@ -44,4 +45,3 @@ inSeg.addEventListener('click', function(e){
   applyLogicState();
   refreshConnections();
 });
-

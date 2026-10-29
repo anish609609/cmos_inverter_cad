@@ -15,9 +15,9 @@ var W = function(){ return host.clientWidth; };
 var H = function(){ return host.clientHeight; };
 
 var camPersp = new THREE.PerspectiveCamera(42, W()/H(), 0.1, 500);
-var INITIAL_POS = new THREE.Vector3(19, 15, 22);
+var INITIAL_POS = new THREE.Vector3(20, 16, 25);
 var INITIAL_TARGET = new THREE.Vector3(-0.5, 1.9, 0);
-var TOP_VIEW_POS = new THREE.Vector3(-0.5, 38, 0.05); // straight overhead, tiny Z offset avoids gimbal-lock flip
+var TOP_VIEW_POS = new THREE.Vector3(-0.5, 42, 0.05); // straight overhead, tiny Z offset avoids gimbal-lock flip
 camPersp.position.copy(INITIAL_POS);
 
 var renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
@@ -51,8 +51,8 @@ var key = new THREE.DirectionalLight(0xffffff, 1.15);
 key.position.set(16, 24, 12);
 key.castShadow = true;
 key.shadow.mapSize.set(2048, 2048);
-key.shadow.camera.left = -22; key.shadow.camera.right = 22;
-key.shadow.camera.top = 22; key.shadow.camera.bottom = -22;
+key.shadow.camera.left = -24; key.shadow.camera.right = 24;
+key.shadow.camera.top = 24; key.shadow.camera.bottom = -24;
 key.shadow.camera.far = 85;
 key.shadow.bias = -0.0015;
 scene.add(key);

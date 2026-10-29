@@ -9,7 +9,7 @@
 var TREE = [
   { label:'CMOS INVERTER', children:[
     { label:'SUBSTRATE', children:[ { label:'P-SUBSTRATE', id:'psub' } ] },
-    { label:'WELL', children:[ { label:'N-WELL', id:'nwell' } ] },
+    { label:'WELL', children:[ { label:'N-WELL', id:'nwell' }, { label:'P-WELL', id:'pwell' } ] },
     { label:'TRANSISTORS', children:[
       { label:'PMOS', id:'pmos', children:[
         { label:'SOURCE', id:'pmosSrc' }, { label:'GATE', id:'poly' }, { label:'DRAIN', id:'pmosDrn' }
@@ -18,9 +18,10 @@ var TREE = [
         { label:'SOURCE', id:'nmosSrc' }, { label:'GATE', id:'poly' }, { label:'DRAIN', id:'nmosDrn' }
       ]}
     ]},
+    { label:'GATE OXIDE (SiO2)', children:[ { label:'PMOS OXIDE (SiO2)', id:'pmosOxide' }, { label:'NMOS OXIDE (SiO2)', id:'nmosOxide' } ] },
+    { label:'HIGH-K DIELECTRIC (HfO2)', children:[ { label:'PMOS HIGH-K (HfO2)', id:'pmosHighk' }, { label:'NMOS HIGH-K (HfO2)', id:'nmosHighk' } ] },
     { label:'POLYSILICON', children:[ { label:'COMMON GATE', id:'poly' } ] },
-    { label:'GATE OXIDE', children:[ { label:'PMOS OXIDE', id:'pmosOxide' }, { label:'NMOS OXIDE', id:'nmosOxide' } ] },
-    { label:'CONTACTS', id:'pmosSrcCt', children:[
+    { label:'CONTACTS (TUNGSTEN)', id:'pmosSrcCt', children:[
       { label:'PMOS SRC CT', id:'pmosSrcCt' }, { label:'PMOS DRN CT', id:'pmosDrnCt' },
       { label:'NMOS SRC CT', id:'nmosSrcCt' }, { label:'NMOS DRN CT', id:'nmosDrnCt' },
       { label:'POLY / IN CT', id:'polyCt' }
@@ -41,11 +42,11 @@ var VIRTUAL = {
 function idToInfo(id){
   if (INFO[id]) return INFO[id];
   var map = { pmosSrc:'actP', pmosDrn:'actP', nmosSrc:'actN', nmosDrn:'actN',
-    pmosOxide:'oxide', nmosOxide:'oxide',
+    pmosOxide:'oxide', nmosOxide:'oxide', pmosHighk:'highk', nmosHighk:'highk',
     pmosSrcCt:'contact', pmosDrnCt:'contact', nmosSrcCt:'contact', nmosDrnCt:'contact', polyCt:'contact',
     welltapCt:'welltap', subtapCt:'subtap', welltapAct:'welltap', subtapAct:'subtap',
     vddRail:'vdd', vddStubPmos:'vdd', vddStubTap:'vdd', gndRail:'gnd', gndStubNmos:'gnd', gndStubTap:'gnd',
-    inPin:'inNet', outPin:'outNet', outSpine:'outNet', poly:'poly', nwell:'nwell', psub:'psub' };
+    inPin:'inNet', outPin:'outNet', outSpine:'outNet', poly:'poly', nwell:'nwell', pwell:'pwell', psub:'psub' };
   return INFO[map[id]] || null;
 }
 
@@ -86,11 +87,12 @@ treeRoot.appendChild(renderTree(TREE, 0));
 // =====================================================================
 var layerMeta = [
   { key:'substrate', name:'SUBSTRATE', color:'var(--c-substrate)' },
-  { key:'well', name:'N-WELL', color:'var(--c-well)' },
+  { key:'well', name:'WELLS (N-WELL & P-WELL)', color:'var(--c-well)' },
   { key:'active', name:'ACTIVE / DIFFUSION', color:'var(--c-active-p)' },
-  { key:'oxide', name:'GATE OXIDE', color:'var(--c-oxide)' },
+  { key:'oxide', name:'GATE OXIDE (SiO2)', color:'var(--c-oxide)' },
+  { key:'highk', name:'HIGH-K DIELECTRIC (HfO2)', color:'var(--c-highk)' },
   { key:'poly', name:'POLYSILICON', color:'var(--c-poly)' },
-  { key:'contact', name:'CONTACT', color:'var(--c-contact)' },
+  { key:'contact', name:'CONTACT (TUNGSTEN)', color:'var(--c-contact)' },
   { key:'metal', name:'METAL-1 (incl. VDD/GND/IN/OUT)', color:'var(--c-metal)' }
 ];
 var layersBody = document.getElementById('layers-body');
@@ -100,7 +102,7 @@ layerMeta.forEach(function(l){
   row.innerHTML = '<input type="checkbox" checked data-layer="'+l.key+'"><span class="swatch" style="background:'+l.color+'"></span><label>'+l.name+'</label>';
   layersBody.appendChild(row);
   row.querySelector('input').addEventListener('change', function(e){
-    groups[l.key].visible = e.target.checked;
+    if (groups[l.key]) groups[l.key].visible = e.target.checked;
   });
   row.querySelector('label').addEventListener('click', function(){
     var cb = row.querySelector('input'); cb.checked = !cb.checked;
@@ -125,4 +127,3 @@ document.querySelectorAll('.panel-head').forEach(function(h){
     chev.classList.toggle('closed');
   });
 });
-

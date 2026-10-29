@@ -1,6 +1,6 @@
 /**
  * render-loop.js
- * The requestAnimationFrame render loop and the small helper that maps a mesh id to its legend color for the pulsing highlight.
+ * The requestAnimationFrame render loop, dynamic travelling emissive glow wave on active Metal-1 routes, and layer-color mapping.
  */
 
 // =====================================================================
@@ -14,15 +14,25 @@ function animate(){
 
   stepFlowMarkers(dt);
   selectable.forEach(function(m){
+    if (!m || !m.material || !m.material.emissive) return;
     if (m.userData.pulsing){
-      var pulse = 0.35 + Math.abs(Math.sin(t*2.2))*0.35;
       if (selectedMeshes.indexOf(m) === -1){
-        m.material.emissive.setHex(new THREE.Color(cssVar(layerColorOf(m))).getHex());
-        m.material.emissiveIntensity = pulse;
+        if (m.userData.layer === 'metal'){
+          // Dynamic travelling emissive glow wave along conducting Metal-1 routes
+          var flowColor = (typeof flowMode !== 'undefined' && flowMode === 'electron') ? 0x4fd1ff : 0xffcf4d;
+          var wave = 0.5 + 0.5 * Math.sin(t * 5.0 - (m.position.z || 0) * 0.5);
+          var pulse = 0.35 + 0.55 * wave;
+          m.material.emissive.setHex(flowColor);
+          m.material.emissiveIntensity = pulse;
+        } else {
+          var pulse = 0.35 + Math.abs(Math.sin(t*2.2))*0.35;
+          m.material.emissive.setHex(new THREE.Color(cssVar(layerColorOf(m))).getHex());
+          m.material.emissiveIntensity = pulse;
+        }
       }
     } else if (selectedMeshes.indexOf(m) === -1 && m.material.emissiveIntensity !== m.userData.baseEmissiveIntensity){
-      m.material.emissive.setHex(m.userData.baseEmissive);
-      m.material.emissiveIntensity = m.userData.baseEmissiveIntensity;
+      m.material.emissive.setHex(m.userData.baseEmissive || 0);
+      m.material.emissiveIntensity = m.userData.baseEmissiveIntensity || 0;
     }
   });
 
@@ -41,4 +51,3 @@ function layerColorOf(m){
   if (id === 'nmosSrc' || id === 'nmosDrn') return '--c-active-n';
   return '--c-metal';
 }
-

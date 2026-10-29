@@ -11,8 +11,10 @@ var HIGHLIGHT_COLOR = new THREE.Color(cssVar('--highlight')); // bright magenta 
 
 function clearSelection(){
   selectedMeshes.forEach(function(m){
-    m.material.emissive.setHex(m.userData.baseEmissive);
-    m.material.emissiveIntensity = m.userData.baseEmissiveIntensity;
+    if (m && m.material && m.material.emissive && typeof m.userData.baseEmissive === 'number'){
+      m.material.emissive.setHex(m.userData.baseEmissive);
+      m.material.emissiveIntensity = m.userData.baseEmissiveIntensity || 0;
+    }
   });
   selectedMeshes = [];
   document.querySelectorAll('#tree .node.selected').forEach(function(n){ n.classList.remove('selected'); });
@@ -21,8 +23,10 @@ function clearSelection(){
 function highlightMeshes(meshes){
   clearSelection();
   meshes.forEach(function(m){
-    m.material.emissive = HIGHLIGHT_COLOR.clone();
-    m.material.emissiveIntensity = 0.55;
+    if (m && m.material && m.material.emissive){
+      m.material.emissive = HIGHLIGHT_COLOR.clone();
+      m.material.emissiveIntensity = 0.55;
+    }
     selectedMeshes.push(m);
   });
 }
@@ -115,4 +119,3 @@ renderer.domElement.addEventListener('click', function(e){
     hidePopover();
   }
 });
-

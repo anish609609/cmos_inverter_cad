@@ -25,7 +25,7 @@ explodeSlider.addEventListener('input', function(e){ applyExplode(parseInt(e.tar
 // =====================================================================
 var clipX = new THREE.Plane(new THREE.Vector3(-1,0,0), 12.5);
 var clipY = new THREE.Plane(new THREE.Vector3(0,-1,0), 22);
-var clipZ = new THREE.Plane(new THREE.Vector3(0,0,-1), 15);
+var clipZ = new THREE.Plane(new THREE.Vector3(0,0,-1), 18);
 renderer.clippingPlanes = [clipX, clipY, clipZ];
 
 function wireScrub(sliderId, valId, plane, scale){
@@ -48,4 +48,3 @@ var scrubZ = wireScrub('scrub-z-slider', 'scrub-z-val', clipZ, 100);
 function resetScrub(){
   [scrubX, scrubY, scrubZ].forEach(function(s){ s.slider.value = s.slider.max; s.apply(); });
 }
-
