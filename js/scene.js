@@ -46,7 +46,8 @@ function resize(){
 window.addEventListener('resize', resize);
 
 // lights
-scene.add(new THREE.AmbientLight(0x2a3140, 1.1));
+var ambientLight = new THREE.AmbientLight(0x2a3140, 1.1);
+scene.add(ambientLight);
 var key = new THREE.DirectionalLight(0xffffff, 1.15);
 key.position.set(16, 24, 12);
 key.castShadow = true;
@@ -76,3 +77,50 @@ shadowPlane.position.y = -0.01;
 shadowPlane.receiveShadow = true;
 scene.add(shadowPlane);
 
+// Adaptive 3D Canvas Lighting & Environment for Light/Dark Mode
+function applySceneTheme(theme){
+  var isLight = theme === 'light';
+  if (isLight){
+    scene.background = new THREE.Color(0xf4f6f8);
+    if (scene.fog){
+      scene.fog.color.setHex(0xf4f6f8);
+      scene.fog.near = 60;
+      scene.fog.far = 140;
+    }
+    ambientLight.color.setHex(0xe2e8f0);
+    ambientLight.intensity = 1.7; // Enhanced ambient illumination for crisp light mode
+    key.color.setHex(0xffffff);
+    key.intensity = 1.25;
+    fill.color.setHex(0x94a3b8);
+    fill.intensity = 0.45;
+    rim.color.setHex(0x64748b);
+    rim.intensity = 0.30;
+    shadowPlane.material.opacity = 0.16;
+  } else {
+    scene.background = new THREE.Color(0x0a0d12);
+    if (scene.fog){
+      scene.fog.color.setHex(0x0a0d12);
+      scene.fog.near = 55;
+      scene.fog.far = 130;
+    }
+    ambientLight.color.setHex(0x2a3140);
+    ambientLight.intensity = 1.1;
+    key.color.setHex(0xffffff);
+    key.intensity = 1.15;
+    fill.color.setHex(0x5fa8d9);
+    fill.intensity = 0.35;
+    rim.color.setHex(0x5fd9c4);
+    rim.intensity = 0.25;
+    shadowPlane.material.opacity = 0.28;
+  }
+  updateGridTheme(isLight);
+}
+
+function updateGridTheme(isLight){
+  if (grid) scene.remove(grid);
+  var c1 = isLight ? 0x94a3b8 : 0x1c2530;
+  var c2 = isLight ? 0xcbd5e1 : 0x141a22;
+  grid = new THREE.GridHelper(60, 40, c1, c2);
+  grid.position.y = -0.02;
+  scene.add(grid);
+}

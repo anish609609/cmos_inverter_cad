@@ -1,4 +1,4 @@
-  :root{
+:root, :root[data-theme="dark"] {
     --bg: #0b0e13;
     --panel: #11151c;
     --panel-2: #161b24;
@@ -20,6 +20,8 @@
     --c-well: #3f8f6f;
     --c-active-p: #cf8a4a;
     --c-active-n: #4a92c9;
+    --c-sde-p: #f0b47a;
+    --c-sde-n: #8fd0f8;
     --c-oxide: #dff0f7;
     --c-highk: #a855f7;
     --c-poly: #d8503c;
@@ -30,12 +32,40 @@
     --c-in: #e6c94a;
     --c-out: #57cf8f;
   }
-  @media (prefers-color-scheme: light){
-    :root:not([data-theme="dark"]){
-      --bg:#0b0e13; --panel:#11151c; --panel-2:#161b24; --border:#232b38; --text:#d7dee8; --text-dim:#7d8ba0;
-    }
+
+  :root[data-theme="light"] {
+    --bg: #f4f6f8;
+    --panel: #ffffff;
+    --panel-2: #f1f5f9;
+    --border: #cbd5e1;
+    --border-soft: #e2e8f0;
+    --text: #0f172a;
+    --text-dim: #334155;
+    --text-faint: #64748b;
+    --accent: #0d9488;
+    --accent-dim: #ccfbf1;
+    --highlight: #db2777;
+    --highlight-dim: #fce7f3;
+    --warn: #d97706;
+    --danger: #dc2626;
+
+    /* High-contrast semiconductor layer colors for light background */
+    --c-substrate: #475569;
+    --c-well: #059669;
+    --c-active-p: #d97706;
+    --c-active-n: #0284c7;
+    --c-sde-p: #f59e0b;
+    --c-sde-n: #38bdf8;
+    --c-oxide: #0284c7;
+    --c-highk: #7c3aed;
+    --c-poly: #dc2626;
+    --c-contact: #334155;
+    --c-metal: #2563eb;
+    --c-vdd: #dc2626;
+    --c-gnd: #475569;
+    --c-in: #d97706;
+    --c-out: #16a34a;
   }
-  :root[data-theme="dark"]{ }
 
   *{ box-sizing: border-box; }
   :root{ box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
@@ -213,9 +243,12 @@
   }
   #popover.visible{ display:block; opacity:1; }
   #popover .pop-card{
-    pointer-events:auto; width:min(300px, 82vw); max-height:60vh; overflow-y:auto;
+    pointer-events:auto; width:min(300px, 82vw); max-height:60vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--panel); border:1px solid var(--highlight); border-radius:9px;
     padding:12px 14px; box-shadow:0 8px 28px rgba(0,0,0,.55);
+  }
+  #popover #popover-content{
+    overflow-y:auto; max-height:calc(60vh - 24px); padding-right:2px;
   }
   #popover .pop-close{
     position:absolute; top:8px; right:9px; appearance:none; border:none; background:none;
@@ -232,6 +265,19 @@
     content:''; position:absolute; left:-7px; top:-9.5px;
     width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent;
     border-top:8px solid var(--panel);
+  }
+  #popover.flip-below{
+    transform:translate(-50%, 14px);
+  }
+  #popover.flip-below .pop-arrow{
+    top:auto; bottom:100%;
+    border-top:none;
+    border-bottom:9px solid var(--highlight);
+  }
+  #popover.flip-below .pop-arrow::after{
+    top:1.5px;
+    border-top:none;
+    border-bottom:8px solid var(--panel);
   }
   #popover #popover-content .title{ color:var(--highlight); padding-right:16px; }
 
@@ -355,3 +401,125 @@
     .brand span{ display:none; }
   }
 
+
+
+  /* ---------- Theme Toggle Button & Adaptive Theme Overrides ---------- */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 11px;
+  }
+  .theme-icon {
+    display: block;
+    flex: 0 0 auto;
+  }
+  :root[data-theme="dark"] #theme-icon-sun { display: block; }
+  :root[data-theme="dark"] #theme-icon-moon { display: none; }
+  :root[data-theme="light"] #theme-icon-sun { display: none; }
+  :root[data-theme="light"] #theme-icon-moon { display: block; }
+
+  /* Light Theme Panel, Hover & Contrast Overrides */
+  :root[data-theme="light"] #topbar {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border);
+  }
+  :root[data-theme="light"] #topbar .brand b {
+    color: #0f172a;
+  }
+  :root[data-theme="light"] #topbar .brand .dot {
+    background: #0d9488;
+    box-shadow: 0 0 8px rgba(13, 148, 136, 0.4);
+  }
+  :root[data-theme="light"] .seg {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+  }
+  :root[data-theme="light"] .seg button {
+    color: #334155;
+    border-right-color: #cbd5e1;
+  }
+  :root[data-theme="light"] .seg button:hover {
+    color: #0f172a;
+    background: #e2e8f0;
+  }
+  :root[data-theme="light"] .seg button.active {
+    color: #ffffff;
+    background: var(--accent);
+  }
+  :root[data-theme="light"] .tbtn {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #334155;
+  }
+  :root[data-theme="light"] .tbtn:hover {
+    color: #0f172a;
+    border-color: #94a3b8;
+    background: #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  :root[data-theme="light"] .tbtn.active {
+    color: #ffffff;
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  :root[data-theme="light"] #left-panel,
+  :root[data-theme="light"] #right-panel {
+    background: #ffffff;
+    box-shadow: 0 0 24px rgba(15, 23, 42, 0.10);
+  }
+  :root[data-theme="light"] .panel-head:hover,
+  :root[data-theme="light"] .layer-row:hover,
+  :root[data-theme="light"] #tree .node:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+  :root[data-theme="light"] #tree .node.selected {
+    background: var(--highlight-dim);
+    color: var(--highlight);
+  }
+  :root[data-theme="light"] #viewport-wrap {
+    background: radial-gradient(circle at 50% 40%, #ffffff 0%, #e2e8f0 75%);
+  }
+  :root[data-theme="light"] #schematic-overlay {
+    background: #f8fafc;
+  }
+  :root[data-theme="light"] #schematic-overlay .cap {
+    color: var(--text-faint);
+  }
+  :root[data-theme="light"] #flow-caption {
+    background: rgba(255, 255, 255, 0.92);
+    color: #b45309;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  :root[data-theme="light"] #note {
+    background: rgba(255, 255, 255, 0.90);
+    color: #334155;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+  :root[data-theme="light"] #popover .pop-card {
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  }
+  :root[data-theme="light"] #popover .pop-arrow::after {
+    border-top-color: #ffffff;
+  }
+  :root[data-theme="light"] #popover.flip-below .pop-arrow::after {
+    border-bottom-color: #ffffff;
+  }
+  :root[data-theme="light"] #view-hud {
+    background: #ffffff;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
+  }
+  :root[data-theme="light"] #view-hud .vh-title {
+    background: #ffffff;
+  }
+  :root[data-theme="light"] #footer {
+    background: #ffffff;
+    border-top: 1px solid var(--border);
+  }
+  :root[data-theme="light"] ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+  }

@@ -268,6 +268,8 @@ function gaussianDopingMesh(w, h, d, colorVar, opts){
   mesh.userData.baseEmissive = 0x000000;
   mesh.userData.baseEmissiveIntensity = 0;
   mesh.userData.isGaussianDoping = true;
+  mesh.userData.colorVar = colorVar;
+  mesh.userData.outlineColor = opts.outlineColor;
   mesh.renderOrder = opts.renderOrder || 2;
 
   // Add 3D Iso-concentration Contour Wire Loops at depths eta = 0.25, 0.50, 0.75
@@ -542,6 +544,7 @@ function box(w,h,d, colorVar, opts){
   var mat = new THREE.MeshStandardMaterial(matParams);
   var geo = new THREE.BoxGeometry(w,h,d);
   var mesh = new THREE.Mesh(geo, mat);
+  mesh.userData.colorVar = colorVar;
   mesh.castShadow = !opts.noShadow;
   mesh.receiveShadow = true;
   mesh.userData.baseEmissive = 0x000000;
@@ -561,7 +564,10 @@ function box(w,h,d, colorVar, opts){
 function put(mesh, x,y,z){ mesh.position.set(x,y,z); return mesh; }
 
 // canvas-sprite labels with depth testing enabled so viewing from below correctly occludes them
+var labelSprites = [];
+
 function makeLabel(text, colorHex){
+  var isLight = document.documentElement.getAttribute('data-theme') === 'light';
   var pad = 10, fontSize = 26;
   var canvas = document.createElement('canvas');
   var ctx = canvas.getContext('2d');
@@ -570,7 +576,7 @@ function makeLabel(text, colorHex){
   canvas.width = Math.ceil(metrics.width) + pad*2;
   canvas.height = fontSize + pad*2;
   ctx.font = '600 ' + fontSize + 'px IBM Plex Mono, monospace';
-  ctx.fillStyle = 'rgba(10,13,18,0.72)';
+  ctx.fillStyle = isLight ? 'rgba(255,255,255,0.92)' : 'rgba(10,13,18,0.72)';
   ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.strokeStyle = colorHex; ctx.lineWidth = 1.5;
   ctx.strokeRect(0.75,0.75,canvas.width-1.5,canvas.height-1.5);
@@ -584,7 +590,53 @@ function makeLabel(text, colorHex){
   var scale = 0.014;
   sprite.scale.set(canvas.width*scale, canvas.height*scale, 1);
   sprite.renderOrder = 999;
+  sprite.userData.isLabel = true;
+  sprite.userData.labelText = text;
+  sprite.userData.colorHex = colorHex;
+  labelSprites.push(sprite);
   return sprite;
+}
+
+function updateLabelSprite(sprite, text, colorHex, isLight){
+  var pad = 10, fontSize = 26;
+  var canvas = document.createElement('canvas');
+  var ctx = canvas.getContext('2d');
+  ctx.font = '600 ' + fontSize + 'px IBM Plex Mono, monospace';
+  var metrics = ctx.measureText(text);
+  canvas.width = Math.ceil(metrics.width) + pad*2;
+  canvas.height = fontSize + pad*2;
+  ctx.font = '600 ' + fontSize + 'px IBM Plex Mono, monospace';
+  ctx.fillStyle = isLight ? 'rgba(255,255,255,0.92)' : 'rgba(10,13,18,0.72)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = colorHex; ctx.lineWidth = 1.5;
+  ctx.strokeRect(0.75,0.75,canvas.width-1.5,canvas.height-1.5);
+  ctx.fillStyle = colorHex;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, pad, canvas.height/2 + 1);
+  if (sprite.material && sprite.material.map){
+    sprite.material.map.dispose();
+  }
+  var tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  sprite.material.map = tex;
+  sprite.material.needsUpdate = true;
+}
+
+function updateMaterialsTheme(){
+  var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  selectable.forEach(function(m){
+    if (m && m.userData && m.userData.colorVar && m.material && m.material.color){
+      var hex = cssVar(m.userData.colorVar);
+      if (hex){
+        m.material.color.set(hex);
+      }
+    }
+  });
+  labelSprites.forEach(function(s){
+    if (s && s.userData && s.userData.labelText && s.userData.colorHex){
+      updateLabelSprite(s, s.userData.labelText, s.userData.colorHex, isLight);
+    }
+  });
 }
 
 // =====================================================================
@@ -683,10 +735,11 @@ var pwellMesh = gaussianDopingMesh(wellW, wellH, wellD, '--c-substrate', {
 put(pwellMesh, wellX, (Y.wellTop+Y.wellBot)/2, pwellZC);
 reg(pwellMesh, 'pwell', 'well');
 
-// ---------- ACTIVE / DIFFUSION — Gaussian shallow-junction implant profiles ----------
+// ---------- ACTIVE / DIFFUSION & SDE / LDD REGIONS ----------
 // Source and drain are shallow implants: peak close to surface (BF2 for p+, As/P for n+),
 // tight sigma, with lateral straggle extending under the poly gate edges.
-function buildActiveRow(zc, srcColorVar, idPrefix, layerKey, dopingHex){
+// Lightly doped extensions (SDE/LDD) sit shallowly at channel edges under gate spacer interfaces.
+function buildActiveRow(zc, srcColorVar, sdeColorVar, idPrefix, layerKey, dopingHex, sdeHex){
   var actH    = Y.actTop - Y.actBot;
   var actW_SD = SRC_X1 - SRC_X0;        // 3.0 units lateral width
   var actW_D  = DRN_X1 - DRN_X0;        // 3.0 units lateral width
@@ -702,15 +755,53 @@ function buildActiveRow(zc, srcColorVar, idPrefix, layerKey, dopingHex){
     renderOrder: 3
   });
   put(src, SRC_X, (Y.actTop+Y.actBot)/2, zc);
+  src.userData.colorVar = srcColorVar;
   reg(src, idPrefix+'Src', layerKey);
+
+  // Source/Drain Extension (SDE / LDD) regions:
+  // Ultra-shallow, lightly doped extensions at channel edges
+  var sdeH = actH * 0.65; // Shallower than main S/D (0.26 vs 0.40)
+  var sdeMidY = Y.actTop - sdeH / 2;
+  var sdeW = 0.55;
+
+  // Source SDE (channel-facing edge at X = -0.925)
+  var srcSde = gaussianDopingMesh(sdeW, sdeH, ACTIVE_W, sdeColorVar, {
+    peakV: 0.10,
+    sigmaV: 0.28,
+    straggle: 0.12,
+    cornerR: 0.25,
+    opacity: 0.72,
+    outlineColor: sdeHex,
+    depthWrite: false,
+    renderOrder: 4
+  });
+  put(srcSde, -0.925, sdeMidY, zc);
+  srcSde.userData.colorVar = sdeColorVar;
+  reg(srcSde, idPrefix+'SrcSde', layerKey);
 
   // Decorative gate inversion channel segment under the gate
   var gateSeg = box(CH.max-CH.min, actH*0.7, ACTIVE_W, srcColorVar,
     { roughness:0.5, opacity:0.28, transparent:true, outline:false });
   put(gateSeg, 0, (Y.actTop+Y.actBot)/2 - actH*0.15, zc);
   gateSeg.userData.decorative = true;
+  gateSeg.userData.colorVar = srcColorVar;
   gateSeg.renderOrder = 3;
   groups[layerKey].add(gateSeg);
+
+  // Drain SDE (channel-facing edge at X = +0.925)
+  var drnSde = gaussianDopingMesh(sdeW, sdeH, ACTIVE_W, sdeColorVar, {
+    peakV: 0.10,
+    sigmaV: 0.28,
+    straggle: 0.12,
+    cornerR: 0.25,
+    opacity: 0.72,
+    outlineColor: sdeHex,
+    depthWrite: false,
+    renderOrder: 4
+  });
+  put(drnSde, 0.925, sdeMidY, zc);
+  drnSde.userData.colorVar = sdeColorVar;
+  reg(drnSde, idPrefix+'DrnSde', layerKey);
 
   // Drain — shallow Gaussian implant
   var drn = gaussianDopingMesh(actW_D, actH, ACTIVE_W, srcColorVar, {
@@ -723,12 +814,13 @@ function buildActiveRow(zc, srcColorVar, idPrefix, layerKey, dopingHex){
     renderOrder: 3
   });
   put(drn, DRN_X, (Y.actTop+Y.actBot)/2, zc);
+  drn.userData.colorVar = srcColorVar;
   reg(drn, idPrefix+'Drn', layerKey);
 
-  return { src:src, drn:drn };
+  return { src:src, drn:drn, srcSde:srcSde, drnSde:drnSde };
 }
-var pmosAct = buildActiveRow(PMOS_ZC, '--c-active-p', 'pmos', 'active', '#f0b877');
-var nmosAct = buildActiveRow(NMOS_ZC, '--c-active-n', 'nmos', 'active', '#7fc3ec');
+var pmosAct = buildActiveRow(PMOS_ZC, '--c-active-p', '--c-sde-p', 'pmos', 'active', '#f0b877', '#fcd34d');
+var nmosAct = buildActiveRow(NMOS_ZC, '--c-active-n', '--c-sde-n', 'nmos', 'active', '#7fc3ec', '#bae6fd');
 
 // ---------- WELL TAP / SUBSTRATE TAP — Gaussian ohmic contact diffusions ----------
 var wellTapPad = gaussianDopingMesh(1.3, Y.actTop-Y.actBot, 1.3, '--c-well', {
@@ -927,6 +1019,7 @@ function addLabel(text, x,y,z, colorHex, groupKey){
 }
 addLabel('VDD', -9, Y.metalTop+0.6, RAIL_Z, '#e35d5d', 'metal');
 addLabel('PMOS', SRC_X-1.2, Y.actTop+0.9, PMOS_ZC, '#cf8a4a', 'active');
+addLabel('P-SDE', -0.925, Y.actTop+0.45, PMOS_ZC - 3.4, '#f0b47a', 'active');
 addLabel('N-WELL', 4.8, Y.wellTop+0.5, nwellZC, '#3f8f6f', 'well');
 addLabel('P-WELL', 4.8, Y.wellTop+0.5, pwellZC, '#4a92c9', 'well');
 addLabel('POLY GATE', 0, Y.polyTop+0.7, 0, '#d8503c', 'poly');
@@ -935,5 +1028,6 @@ addLabel('SiO2 OXIDE', 1.9, Y.oxideTop+0.35, PMOS_ZC, '#8fc9dc', 'oxide');
 addLabel('IN', 0, Y.metalTop+0.6, POLY_CT_Z+1.1, '#e6c94a', 'metal');
 addLabel('OUT', DRN_X+3.6, Y.metalTop+0.6, 0, '#57cf8f', 'metal');
 addLabel('NMOS', SRC_X-1.2, Y.actTop+0.9, NMOS_ZC, '#4a92c9', 'active');
+addLabel('N-SDE', -0.925, Y.actTop+0.45, NMOS_ZC - 3.4, '#8fd0f8', 'active');
 addLabel('P-SUBSTRATE', 8.5, Y.subTop+0.4, 0, '#9aa6b6', 'substrate');
 addLabel('GND', -9, Y.metalTop+0.6, -RAIL_Z, '#9aa6b6', 'metal');

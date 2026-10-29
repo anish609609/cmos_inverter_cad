@@ -12,10 +12,10 @@ var TREE = [
     { label:'WELL', children:[ { label:'N-WELL', id:'nwell' }, { label:'P-WELL', id:'pwell' } ] },
     { label:'TRANSISTORS', children:[
       { label:'PMOS', id:'pmos', children:[
-        { label:'SOURCE', id:'pmosSrc' }, { label:'GATE', id:'poly' }, { label:'DRAIN', id:'pmosDrn' }
+        { label:'SOURCE', id:'pmosSrc' }, { label:'P-SDE (SRC)', id:'pmosSrcSde' }, { label:'GATE', id:'poly' }, { label:'P-SDE (DRN)', id:'pmosDrnSde' }, { label:'DRAIN', id:'pmosDrn' }
       ]},
       { label:'NMOS', id:'nmos', children:[
-        { label:'SOURCE', id:'nmosSrc' }, { label:'GATE', id:'poly' }, { label:'DRAIN', id:'nmosDrn' }
+        { label:'SOURCE', id:'nmosSrc' }, { label:'N-SDE (SRC)', id:'nmosSrcSde' }, { label:'GATE', id:'poly' }, { label:'N-SDE (DRN)', id:'nmosDrnSde' }, { label:'DRAIN', id:'nmosDrn' }
       ]}
     ]},
     { label:'GATE OXIDE (SiO2)', children:[ { label:'PMOS OXIDE (SiO2)', id:'pmosOxide' }, { label:'NMOS OXIDE (SiO2)', id:'nmosOxide' } ] },
@@ -35,13 +35,14 @@ var TREE = [
 
 // virtual (non-mesh) ids resolve to an aggregate info + representative mesh(es) to highlight
 var VIRTUAL = {
-  pmos: { info:'pmos', meshes:['pmosSrc','pmosDrn','poly'] },
-  nmos: { info:'nmos', meshes:['nmosSrc','nmosDrn','poly'] }
+  pmos: { info:'pmos', meshes:['pmosSrc','pmosDrn','pmosSrcSde','pmosDrnSde','poly'] },
+  nmos: { info:'nmos', meshes:['nmosSrc','nmosDrn','nmosSrcSde','nmosDrnSde','poly'] }
 };
 
 function idToInfo(id){
   if (INFO[id]) return INFO[id];
   var map = { pmosSrc:'actP', pmosDrn:'actP', nmosSrc:'actN', nmosDrn:'actN',
+    pmosSrcSde:'sdeP', pmosDrnSde:'sdeP', nmosSrcSde:'sdeN', nmosDrnSde:'sdeN',
     pmosOxide:'oxide', nmosOxide:'oxide', pmosHighk:'highk', nmosHighk:'highk',
     pmosSrcCt:'contact', pmosDrnCt:'contact', nmosSrcCt:'contact', nmosDrnCt:'contact', polyCt:'contact',
     welltapCt:'welltap', subtapCt:'subtap', welltapAct:'welltap', subtapAct:'subtap',

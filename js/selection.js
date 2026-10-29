@@ -82,7 +82,16 @@ function updatePopoverPosition(){
   var x = (proj.x*0.5+0.5) * rect.width;
   var y = (-proj.y*0.5+0.5) * rect.height;
   x = Math.max(70, Math.min(rect.width-70, x));
-  y = Math.max(80, Math.min(rect.height-16, y));
+  y = Math.max(50, Math.min(rect.height-16, y));
+
+  var card = popoverEl.querySelector('.pop-card');
+  var cardH = card ? card.offsetHeight : 320;
+  if (y - cardH < 56) {
+    popoverEl.classList.add('flip-below');
+  } else {
+    popoverEl.classList.remove('flip-below');
+  }
+
   popoverEl.style.left = x + 'px';
   popoverEl.style.top = y + 'px';
   popoverEl.classList.add('visible');

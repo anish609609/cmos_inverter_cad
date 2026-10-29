@@ -74,6 +74,7 @@ function resetAll(){
 }
 
 resize();
+if (typeof initTheme === 'function') initTheme();
 stateBadge.classList.add('visible');
 resetAll();
 requestAnimationFrame(function(){

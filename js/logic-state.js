@@ -30,8 +30,8 @@ function applyLogicState(){
     badgeOut.textContent = 'FLOATING (HIGH-Z)';
     badgeOut.className = 'v floating';
 
-    [pmosAct.src, pmosAct.drn].forEach(function(m){ setOnOffTint(m, 'partial'); });
-    [nmosAct.src, nmosAct.drn].forEach(function(m){ setOnOffTint(m, 'partial'); });
+    [pmosAct.src, pmosAct.drn, pmosAct.srcSde, pmosAct.drnSde].forEach(function(m){ if (m) setOnOffTint(m, 'partial'); });
+    [nmosAct.src, nmosAct.drn, nmosAct.srcSde, nmosAct.drnSde].forEach(function(m){ if (m) setOnOffTint(m, 'partial'); });
   } else {
     var pmosOn = currentIn === 0;
     var nmosOn = currentIn === 1;
@@ -49,8 +49,8 @@ function applyLogicState(){
     badgeOut.textContent = out;
     badgeOut.className = 'v ' + (out ? 'on':'off');
 
-    [pmosAct.src, pmosAct.drn].forEach(function(m){ setOnOffTint(m, pmosOn); });
-    [nmosAct.src, nmosAct.drn].forEach(function(m){ setOnOffTint(m, nmosOn); });
+    [pmosAct.src, pmosAct.drn, pmosAct.srcSde, pmosAct.drnSde].forEach(function(m){ if (m) setOnOffTint(m, pmosOn); });
+    [nmosAct.src, nmosAct.drn, nmosAct.srcSde, nmosAct.drnSde].forEach(function(m){ if (m) setOnOffTint(m, nmosOn); });
   }
 }
 

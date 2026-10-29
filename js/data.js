@@ -10,6 +10,7 @@ var LEGEND = [
   { key:'substrate', name:'P-SUBSTRATE', color:'var(--c-substrate)', desc:'Base silicon region. The NMOS transistor is built directly in this p-type substrate.' },
   { key:'well',      name:'N-WELL / P-WELL', color:'var(--c-well)',      desc:'Diffused wells in the substrate. Isolate PMOS (N-well) and NMOS (P-well) transistors with Gaussian doping profiles.' },
   { key:'active',    name:'ACTIVE / DIFFUSION', color:'var(--c-active-p)', desc:'Region where transistor source/drain structures are formed, in both the well (PMOS) and substrate (NMOS).' },
+  { key:'sde',       name:'SDE / LDD EXTENSION', color:'var(--c-sde-p)', desc:'Shallow, lightly doped extension regions (SDE/LDD) at channel edges that mitigate Hot Carrier Injection (HCI) and short-channel effects.' },
   { key:'oxide',     name:'GATE OXIDE',  color:'var(--c-oxide)',     desc:'Thin SiO₂ dielectric between poly and the channel. Insulating — carries no current, only couples the gate field.' },
   { key:'highk',     name:'HIGH-K DIELECTRIC (HfO2)', color:'var(--c-highk)', desc:'Hafnium oxide (HfO₂) dielectric layer with high permittivity (k ≈ 25 vs SiO₂ k = 3.9). Prevents quantum tunneling leakage while maintaining high gate capacitance.' },
   { key:'poly',      name:'POLYSILICON', color:'var(--c-poly)',      desc:'Gate electrode material. A single continuous strip crosses both active regions, forming both gates.' },
@@ -27,6 +28,22 @@ var INFO = {
   pwell:{ title:'P-WELL', fn:'P-type retrograde doped tub inside the p-substrate.', role:'Body terminal of the NMOS transistor; tied to GND via the substrate tap.', conn:'Substrate tap → GND', rel:'Contains the NMOS active region; isolates NMOS in twin-well CMOS architecture.', doping:'P-type, retrograde Gaussian — Na ≈ 1×10¹⁷ cm⁻³ (illustrative)' },
   actP: { title:'ACTIVE / DIFFUSION — PMOS', fn:'Diffusion region where the PMOS source and drain are formed.', role:'Carries current between VDD and OUT when the PMOS channel is ON.', conn:'Source → VDD · Drain → OUT', rel:'Sits inside the N-well; crossed by the shared polysilicon gate.', doping:'P+, heavily doped — Na ≈ 1×10²⁰ cm⁻³ (illustrative)' },
   actN: { title:'ACTIVE / DIFFUSION — NMOS', fn:'Diffusion region where the NMOS source and drain are formed.', role:'Carries current between OUT and GND when the NMOS channel is ON.', conn:'Source → GND · Drain → OUT', rel:'Sits in the p-substrate/P-well; crossed by the shared polysilicon gate.', doping:'N+, heavily doped — Nd ≈ 1×10²⁰ cm⁻³ (illustrative)' },
+  sdeP: {
+    title:'SOURCE/DRAIN EXTENSION (P-SDE / LDD)',
+    fn:'Mitigates Hot Carrier Injection (HCI) and Hot Electron Effects by reducing peak lateral electric fields near the drain junction.',
+    role:'Controls short-channel effects (SCE) and preserves gate dielectric reliability.',
+    conn:'Bridges heavily doped P+ source/drain to the inversion channel under gate edges.',
+    rel:'Shallow extension at the channel-facing edges of PMOS source/drain, directly underneath the outer edges of the gate/spacer interface.',
+    doping:'Lightly doped (~1×10¹⁸ cm⁻³) vs Main S/D (~1×10²⁰ cm⁻³)'
+  },
+  sdeN: {
+    title:'SOURCE/DRAIN EXTENSION (N-SDE / LDD)',
+    fn:'Mitigates Hot Carrier Injection (HCI) and Hot Electron Effects by reducing peak lateral electric fields near the drain junction.',
+    role:'Controls short-channel effects (SCE) and preserves gate dielectric reliability.',
+    conn:'Bridges heavily doped N+ source/drain to the inversion channel under gate edges.',
+    rel:'Shallow extension at the channel-facing edges of NMOS source/drain, directly underneath the outer edges of the gate/spacer interface.',
+    doping:'Lightly doped (~1×10¹⁸ cm⁻³) vs Main S/D (~1×10²⁰ cm⁻³)'
+  },
   oxide:{ title:'GATE OXIDE (INTERFACIAL SiO2)', fn:'Ultra-thin chemical oxide (SiO₂) separating active silicon from the High-k dielectric.', role:'Passivates the silicon channel interface to minimize interfacial defect states (Dit).', conn:'Sandwiched between active silicon (below) and High-k HfO2 (above); carries no steady-state current.', rel:'Present only where poly crosses the active region — directly under each gate.', doping:'Undoped interfacial dielectric — tOX ≈ 0.6 nm equivalent' },
   highk:{ title:'HIGH-K DIELECTRIC (HfO2)', fn:'Hafnium Oxide (HfO2) gate dielectric layer in High-k Metal Gate (HKMG) technology.', role:'Prevents quantum tunneling leakage current while maintaining high gate capacitance (k ≈ 25 vs SiO2 k = 3.9).', conn:'Sandwiched directly above the thin SiO2 interfacial oxide and below the gate electrode; carries no steady-state current.', rel:'Present under both PMOS and NMOS gates, capacitive field control across the channel without direct tunneling.', doping:'High-permittivity dielectric — EOT ≈ 0.8 nm equivalent (k = 25 vs SiO2 k = 3.9)' },
   poly: { title:'POLYSILICON — COMMON CMOS GATE', fn:'Gate electrode. A single continuous strip, not a wire.', role:'Controls both the PMOS and NMOS channels simultaneously.', conn:'IN (via a contact at the far end of the strip)', rel:'Crosses the PMOS active region (forming the PMOS gate) and continues across the NMOS active region (forming the NMOS gate).' },
