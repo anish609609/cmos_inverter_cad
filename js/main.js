@@ -49,6 +49,7 @@ document.getElementById('view-hud-toggle').addEventListener('click', function(){
 // their defaults, and clears any selection.
 // =====================================================================
 function resetAll(){
+  if (typeof stopBuildAnimation === 'function') stopBuildAnimation();
   activeCamera.position.copy(TOP_VIEW_POS);
   controls.target.set(-0.5, 0, 0);
   controls.update();

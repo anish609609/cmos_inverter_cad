@@ -72,6 +72,8 @@
   .seg button:last-child{ border-right:none; }
   .seg button:hover{ color:var(--text); background:#1b2230; transform:translateY(-1px); }
   .seg button.active{ color:#08110f; background:var(--accent); font-weight:600; }
+  .seg button[data-in="off"].active{ color:#1c1303; background:#f59e0b; font-weight:600; }
+  .seg button[data-in="off"].active:hover{ box-shadow:0 0 10px rgba(245,158,11,.5); }
   .seg button.active:hover{ transform:translateY(-1px) scale(1.02); box-shadow:0 0 10px rgba(95,217,196,.4); }
 
   .tbtn{
@@ -286,6 +288,8 @@
   #state-badge .row .v{ font-weight:600; }
   #state-badge .v.on{ color:var(--c-out); }
   #state-badge .v.off{ color:var(--danger); }
+  #state-badge .v.warn{ color:#f59e0b; }
+  #state-badge .v.floating{ color:#e6a23c; }
   #state-badge .disclaimer{ margin-top:6px; font-size:8.5px; color:var(--text-faint); max-width:180px; text-align:right; }
 
   /* On small screens the state badge becomes a popover behind a compact
