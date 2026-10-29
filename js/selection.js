@@ -11,13 +11,17 @@ var HIGHLIGHT_COLOR = new THREE.Color(cssVar('--highlight')); // bright magenta 
 
 function clearSelection(){
   selectedMeshes.forEach(function(m){
-    if (m && m.material && m.material.emissive && typeof m.userData.baseEmissive === 'number'){
-      m.material.emissive.setHex(m.userData.baseEmissive);
-      m.material.emissiveIntensity = m.userData.baseEmissiveIntensity || 0;
+    if (m && m.material && m.material.emissive){
+      var baseHex = (typeof m.userData.baseEmissive === 'number') ? m.userData.baseEmissive : 0;
+      var baseIntensity = (typeof m.userData.baseEmissiveIntensity === 'number') ? m.userData.baseEmissiveIntensity : 0;
+      m.material.emissive.setHex(baseHex);
+      m.material.emissiveIntensity = baseIntensity;
     }
   });
   selectedMeshes = [];
+  lastSelectedId = null;
   document.querySelectorAll('#tree .node.selected').forEach(function(n){ n.classList.remove('selected'); });
+  document.getElementById('crumb-sel').textContent = '';
 }
 
 function highlightMeshes(meshes){
@@ -85,7 +89,10 @@ function updatePopoverPosition(){
 }
 document.getElementById('pop-close').addEventListener('click', function(e){
   e.stopPropagation();
+  clearSelection();
   hidePopover();
+  document.getElementById('inspector').innerHTML = '<div class="empty">Select a layer, region, or tree node to inspect its function, electrical role, and physical relationships.</div>';
+  document.getElementById('crumb-sel').textContent = '';
 });
 
 function selectById(id){
@@ -116,6 +123,9 @@ renderer.domElement.addEventListener('click', function(e){
     var m = hits[0].object;
     selectById(m.userData.id);
   } else {
+    clearSelection();
     hidePopover();
+    document.getElementById('inspector').innerHTML = '<div class="empty">Select a layer, region, or tree node to inspect its function, electrical role, and physical relationships.</div>';
+    document.getElementById('crumb-sel').textContent = '';
   }
 });

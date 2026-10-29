@@ -112,18 +112,28 @@ function updateFlowCaption(){
 }
 
 function refreshConnections(){
-  // clear pulsing on everything, then re-arm only the currently-active path
+  // clear pulsing on everything
   selectable.forEach(function(m){ m.userData.pulsing = false; });
+
+  if (currentIn === 'off'){
+    // In OFF state, all flow is deactivated, particles are hidden and frozen
+    flowMarkers.forEach(function(fm){ fm.mesh.visible = false; });
+    flowCaption.classList.add('visible');
+    flowCaption.textContent = 'CIRCUIT STATE: OFF / HIGH-Z (STATIONARY — ALL FLOW INACTIVE)';
+    selectable.forEach(function(m){
+      if (m && m.material && m.material.emissive && selectedMeshes.indexOf(m) === -1){
+        m.material.emissive.setHex(m.userData.baseEmissive || 0);
+        m.material.emissiveIntensity = m.userData.baseEmissiveIntensity || 0;
+      }
+    });
+    return;
+  }
+
   activePathIds().forEach(function(id){
     var m = findMesh(id);
     if (m) m.userData.pulsing = true;
   });
-  var col;
-  if (currentIn === 'off'){
-    col = flowMode === 'current' ? 0xf59e0b : 0x38bdf8;
-  } else {
-    col = flowMode === 'current' ? 0xffcf4d : 0x4fd1ff;
-  }
+  var col = flowMode === 'current' ? 0xffcf4d : 0x4fd1ff;
   flowMarkers.forEach(function(fm){
     fm.mesh.visible = true;
     fm.mesh.material.color.setHex(col);
@@ -142,9 +152,10 @@ flowSeg.addEventListener('click', function(e){
 
 var UP_AXIS = new THREE.Vector3(0,1,0);
 function stepFlowMarkers(dt){
+  if (currentIn === 'off') return; // Completely freeze in OFF state
   var curve = activeCurve();
   var reversed = flowMode === 'electron';
-  var speed = currentIn === 'off' ? 0.18 : 0.22;
+  var speed = 0.075; // Calm, human-readable flow speed
   flowMarkers.forEach(function(fm){
     fm.t += dt * speed;
     if (fm.t > 1) fm.t -= 1;

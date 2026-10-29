@@ -254,6 +254,10 @@ function gaussianDopingMesh(w, h, d, colorVar, opts){
     transparent: true,
     opacity: opts.opacity !== undefined ? opts.opacity : 0.88,
     side: THREE.DoubleSide,
+    depthWrite: opts.depthWrite !== undefined ? opts.depthWrite : false,
+    polygonOffset: true,
+    polygonOffsetFactor: 1.0,
+    polygonOffsetUnits: 1.0,
     emissive: 0x000000,
     emissiveIntensity: 0
   });
@@ -264,6 +268,7 @@ function gaussianDopingMesh(w, h, d, colorVar, opts){
   mesh.userData.baseEmissive = 0x000000;
   mesh.userData.baseEmissiveIntensity = 0;
   mesh.userData.isGaussianDoping = true;
+  mesh.renderOrder = opts.renderOrder || 2;
 
   // Add 3D Iso-concentration Contour Wire Loops at depths eta = 0.25, 0.50, 0.75
   var contourEtas = [0.25, 0.50, 0.75];
@@ -361,18 +366,28 @@ function gaussianDopingMesh(w, h, d, colorVar, opts){
 }
 
 // ---------------------------------------------------------------------------
-// BEVELED BOX GEOMETRY (for realistic planarized Metal-1 wires)
+// FILLETED TRACE GEOMETRY (Smooth IC Layout Interconnects)
 // ---------------------------------------------------------------------------
-function createBeveledBoxGeometry(w, h, d, bevel){
-  bevel = Math.min(bevel || 0.035, Math.min(w, h, d) * 0.25);
+// Extrudes planar Metal-1 routing traces with smoothly filleted corners,
+// rounded line ends, and beveled top/sidewall profiles to reflect
+// realistic optical-proximity corrected (OPC) planarized interconnects.
+function createFilletedTraceGeometry(w, h, d, cornerRadius, bevel){
+  cornerRadius = Math.min(cornerRadius !== undefined ? cornerRadius : 0.14, Math.min(w, d) * 0.48);
+  bevel = Math.min(bevel !== undefined ? bevel : 0.035, Math.min(w, h, d) * 0.25);
+  var hw = w / 2;
+  var hd = d / 2;
+  var cr = cornerRadius;
+
   var shape = new THREE.Shape();
-  var hw = w / 2 - bevel;
-  var hd = d / 2 - bevel;
-  shape.moveTo(-hw, -hd);
-  shape.lineTo(hw, -hd);
-  shape.lineTo(hw, hd);
-  shape.lineTo(-hw, hd);
-  shape.closePath();
+  shape.moveTo(-hw + cr, -hd);
+  shape.lineTo(hw - cr, -hd);
+  shape.quadraticCurveTo(hw, -hd, hw, -hd + cr);
+  shape.lineTo(hw, hd - cr);
+  shape.quadraticCurveTo(hw, hd, hw - cr, hd);
+  shape.lineTo(-hw + cr, hd);
+  shape.quadraticCurveTo(-hw, hd, -hw, hd - cr);
+  shape.lineTo(-hw, -hd + cr);
+  shape.quadraticCurveTo(-hw, -hd, -hw + cr, -hd);
 
   var extrudeSettings = {
     steps: 1,
@@ -381,13 +396,14 @@ function createBeveledBoxGeometry(w, h, d, bevel){
     bevelThickness: bevel,
     bevelSize: bevel,
     bevelOffset: 0,
-    bevelSegments: 2
+    bevelSegments: 3
   };
   var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
   geo.rotateX(Math.PI / 2);
   geo.center();
   return geo;
 }
+var createBeveledBoxGeometry = createFilletedTraceGeometry;
 
 // Procedural brushed metallic texture with directional micro-scratches
 var brushedMetalTexCache = null;
@@ -529,6 +545,7 @@ function reg(mesh, id, layerKey){
 // ---------- SUBSTRATE ----------
 // Base wafer slab — spans Z in [-12, 12], cleanly exposing P-substrate in the 1.50 gap [-0.75, 0.75]
 var subMesh = box(22, Y.subTop-Y.subBot, 24, '--c-substrate', { roughness:0.85, metalness:0.05 });
+subMesh.renderOrder = 1;
 put(subMesh, -0.5, (Y.subTop+Y.subBot)/2, 0);
 reg(subMesh, 'psub', 'substrate');
 
@@ -554,7 +571,9 @@ var wellMesh = gaussianDopingMesh(wellW, wellH, wellD, '--c-well', {
   sigmaV: 0.28,     // Broad Gaussian with high thermal straggle
   straggle: 0.08,   // Controlled lateral straggle ensuring active is fully enclosed at all depths
   cornerR: 0.35,    // Tight corner radius so active corners never protrude
-  opacity: 0.85
+  opacity: 0.85,
+  depthWrite: false,
+  renderOrder: 2
 });
 put(wellMesh, wellX, (Y.wellTop+Y.wellBot)/2, nwellZC);
 reg(wellMesh, 'nwell', 'well');
@@ -566,7 +585,9 @@ var pwellMesh = gaussianDopingMesh(wellW, wellH, wellD, '--c-substrate', {
   straggle: 0.08,
   cornerR: 0.35,
   opacity: 0.80,
-  outlineColor: '#5a7799'
+  outlineColor: '#5a7799',
+  depthWrite: false,
+  renderOrder: 2
 });
 put(pwellMesh, wellX, (Y.wellTop+Y.wellBot)/2, pwellZC);
 reg(pwellMesh, 'pwell', 'well');
@@ -585,7 +606,9 @@ function buildActiveRow(zc, srcColorVar, idPrefix, layerKey, dopingHex){
     sigmaV: 0.22,     // Tight sigma for abrupt shallow junction
     straggle: 0.16,   // Lateral straggle under gate edge
     cornerR: 0.5,
-    outlineColor: dopingHex
+    outlineColor: dopingHex,
+    depthWrite: false,
+    renderOrder: 3
   });
   put(src, SRC_X, (Y.actTop+Y.actBot)/2, zc);
   reg(src, idPrefix+'Src', layerKey);
@@ -595,6 +618,7 @@ function buildActiveRow(zc, srcColorVar, idPrefix, layerKey, dopingHex){
     { roughness:0.5, opacity:0.28, transparent:true, outline:false });
   put(gateSeg, 0, (Y.actTop+Y.actBot)/2 - actH*0.15, zc);
   gateSeg.userData.decorative = true;
+  gateSeg.renderOrder = 3;
   groups[layerKey].add(gateSeg);
 
   // Drain — shallow Gaussian implant
@@ -603,7 +627,9 @@ function buildActiveRow(zc, srcColorVar, idPrefix, layerKey, dopingHex){
     sigmaV: 0.22,
     straggle: 0.16,
     cornerR: 0.5,
-    outlineColor: dopingHex
+    outlineColor: dopingHex,
+    depthWrite: false,
+    renderOrder: 3
   });
   put(drn, DRN_X, (Y.actTop+Y.actBot)/2, zc);
   reg(drn, idPrefix+'Drn', layerKey);
@@ -615,13 +641,13 @@ var nmosAct = buildActiveRow(NMOS_ZC, '--c-active-n', 'nmos', 'active', '#7fc3ec
 
 // ---------- WELL TAP / SUBSTRATE TAP — Gaussian ohmic contact diffusions ----------
 var wellTapPad = gaussianDopingMesh(1.3, Y.actTop-Y.actBot, 1.3, '--c-well', {
-  peakV: 0.18, sigmaV: 0.24, straggle: 0.20, cornerR: 0.3, outlineColor: '#8fe6c8'
+  peakV: 0.18, sigmaV: 0.24, straggle: 0.20, cornerR: 0.3, outlineColor: '#8fe6c8', depthWrite: false, renderOrder: 3
 });
 put(wellTapPad, TAP_X, (Y.actTop+Y.actBot)/2, PMOS_ZC);
 reg(wellTapPad, 'welltapAct', 'active');
 
 var subTapPad = gaussianDopingMesh(1.3, Y.actTop-Y.actBot, 1.3, '--c-substrate', {
-  peakV: 0.18, sigmaV: 0.24, straggle: 0.20, cornerR: 0.3, outlineColor: '#aab4c2'
+  peakV: 0.18, sigmaV: 0.24, straggle: 0.20, cornerR: 0.3, outlineColor: '#aab4c2', depthWrite: false, renderOrder: 3
 });
 put(subTapPad, TAP_X, (Y.actTop+Y.actBot)/2, NMOS_ZC);
 reg(subTapPad, 'subtapAct', 'active');
@@ -686,18 +712,18 @@ contactAt(0, POLY_CT_Z, Y.polyTop, 'polyCt');
 contactAt(TAP_X, PMOS_ZC, Y.actTop, 'welltapCt');
 contactAt(TAP_X, NMOS_ZC, Y.actTop, 'subtapCt');
 
-// ---------- METAL-1 (Beveled Routes & Realistic Metallic Shaders) ----------
+// ---------- METAL-1 (Smooth Filleted Routes, Landing Pads & Realistic Metallic Shaders) ----------
 var metalH = Y.metalTop - Y.metalBot;
 var midY = (Y.metalTop + Y.metalBot) / 2;
 var METAL_W = 0.45;
 
-function metalBar(x0, x1, z0, z1, colorVar, id){
+function metalBar(x0, x1, z0, z1, colorVar, id, cornerRadius){
   var w = Math.abs(x1 - x0) || METAL_W;
   var d = Math.abs(z1 - z0) || METAL_W;
   var finalW = Math.max(w, METAL_W);
   var finalD = Math.max(d, METAL_W);
 
-  var geo = createBeveledBoxGeometry(finalW, metalH, finalD, 0.035);
+  var geo = createFilletedTraceGeometry(finalW, metalH, finalD, cornerRadius !== undefined ? cornerRadius : 0.16, 0.035);
   var mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(cssVar(colorVar)),
     metalness: 0.90,
@@ -716,22 +742,81 @@ function metalBar(x0, x1, z0, z1, colorVar, id){
   return m;
 }
 
+// Rounded contact via landing pads (flared metal-1 enclosure around contact plugs)
+function metalViaPad(x, z, colorVar, parentId){
+  var padGeo = createFilletedTraceGeometry(0.70, metalH, 0.70, 0.32, 0.035);
+  var mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(cssVar(colorVar)),
+    metalness: 0.90,
+    roughness: 0.20,
+    roughnessMap: getBrushedMetalTexture(),
+    emissive: 0x000000,
+    emissiveIntensity: 0
+  });
+  var m = new THREE.Mesh(padGeo, mat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  m.userData.baseEmissive = 0x000000;
+  m.userData.baseEmissiveIntensity = 0;
+  m.userData.isViaLanding = true;
+  put(m, x, midY, z);
+  reg(m, parentId || 'metal', 'metal');
+  return m;
+}
+
+// Smooth filleted T-junction transition pad
+function metalJunction(x, z, w, d, colorVar, parentId){
+  var juncGeo = createFilletedTraceGeometry(w, metalH, d, 0.22, 0.035);
+  var mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(cssVar(colorVar)),
+    metalness: 0.90,
+    roughness: 0.20,
+    roughnessMap: getBrushedMetalTexture(),
+    emissive: 0x000000,
+    emissiveIntensity: 0
+  });
+  var m = new THREE.Mesh(juncGeo, mat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  m.userData.baseEmissive = 0x000000;
+  m.userData.baseEmissiveIntensity = 0;
+  m.userData.isViaLanding = true;
+  put(m, x, midY, z);
+  reg(m, parentId || 'metal', 'metal');
+  return m;
+}
+
 // VDD rail + stubs
 metalBar(-9, 9, RAIL_Z, RAIL_Z, '--c-vdd', 'vddRail');
 metalBar(SRC_X, SRC_X, PMOS_ZC, RAIL_Z, '--c-vdd', 'vddStubPmos');
 metalBar(TAP_X, TAP_X, PMOS_ZC, RAIL_Z, '--c-vdd', 'vddStubTap');
+// VDD filleted junctions & via landings
+metalJunction(SRC_X, RAIL_Z, 0.85, 0.85, '--c-vdd', 'vddStubPmos');
+metalJunction(TAP_X, RAIL_Z, 0.85, 0.85, '--c-vdd', 'vddStubTap');
+metalViaPad(SRC_X, PMOS_ZC, '--c-vdd', 'vddStubPmos');
+metalViaPad(TAP_X, PMOS_ZC, '--c-vdd', 'vddStubTap');
 
 // GND rail + stubs
 metalBar(-9, 9, -RAIL_Z, -RAIL_Z, '--c-gnd', 'gndRail');
 metalBar(SRC_X, SRC_X, NMOS_ZC, -RAIL_Z, '--c-gnd', 'gndStubNmos');
 metalBar(TAP_X, TAP_X, NMOS_ZC, -RAIL_Z, '--c-gnd', 'gndStubTap');
+// GND filleted junctions & via landings
+metalJunction(SRC_X, -RAIL_Z, 0.85, 0.85, '--c-gnd', 'gndStubNmos');
+metalJunction(TAP_X, -RAIL_Z, 0.85, 0.85, '--c-gnd', 'gndStubTap');
+metalViaPad(SRC_X, NMOS_ZC, '--c-gnd', 'gndStubNmos');
+metalViaPad(TAP_X, NMOS_ZC, '--c-gnd', 'gndStubTap');
 
 // OUT
 metalBar(DRN_X, DRN_X, PMOS_ZC, NMOS_ZC, '--c-out', 'outSpine');
 metalBar(DRN_X, DRN_X+3.5, 0, 0, '--c-out', 'outPin');
+// OUT filleted junction & via landings
+metalJunction(DRN_X, 0, 0.90, 0.90, '--c-out', 'outSpine');
+metalViaPad(DRN_X, PMOS_ZC, '--c-out', 'outSpine');
+metalViaPad(DRN_X, NMOS_ZC, '--c-out', 'outSpine');
 
 // IN
 metalBar(0, 0, POLY_CT_Z, POLY_CT_Z+0.9, '--c-in', 'inPin');
+metalViaPad(0, POLY_CT_Z, '--c-in', 'inPin');
 
 // =====================================================================
 // LABELS

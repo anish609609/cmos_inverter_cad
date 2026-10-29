@@ -13,7 +13,7 @@ var isBuildPaused = false;
 var animTime = 0;
 
 var DROP_HEIGHT = 16.0;
-var TOTAL_DURATION = 3.30; // 3.3 seconds total sequence
+var TOTAL_DURATION = 4.80; // Relaxed cinematic assembly sequence
 
 var camStartPos = new THREE.Vector3(22, 18, 25);
 var camStartTarget = new THREE.Vector3(-0.5, 3.2, 0);
@@ -77,9 +77,9 @@ function initBuildSteps(){
     });
   });
 
-  // Stagger each layer by ~380ms with 550ms drop duration
-  var dur = 0.55;
-  var stagger = 0.38;
+  // Stagger each layer by ~550ms with 850ms drop duration for majestic, clear pace
+  var dur = 0.85;
+  var stagger = 0.55;
   for (var i = 0; i < stepMeshes.length; i++){
     buildSteps.push({
       index: i + 1,
