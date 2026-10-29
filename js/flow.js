@@ -24,40 +24,42 @@ var SHOOT_THROUGH_PATH_IDS = [
   'nmosDrnCt','nmosDrn','nmosSrc','nmosSrcCt','gndStubNmos','gndRail'
 ];
 
+var METAL_FLOW_Y = (Y.metalTop + Y.metalBot) / 2;
+
 var PMOS_PATH_BASE = [
-  { p:new THREE.Vector3(SRC_X, Y.metalTop-0.15, RAIL_Z), layer:'metal' },
-  { p:new THREE.Vector3(SRC_X, Y.metalTop-0.15, PMOS_ZC), layer:'metal' },
+  { p:new THREE.Vector3(SRC_X, METAL_FLOW_Y, RAIL_Z), layer:'metal' },
+  { p:new THREE.Vector3(SRC_X, METAL_FLOW_Y, PMOS_ZC), layer:'metal' },
   { p:new THREE.Vector3(SRC_X, Y.actTop+0.15, PMOS_ZC), layer:'active' },
   { p:new THREE.Vector3(0,      Y.actTop+0.15, PMOS_ZC), layer:'active' },
   { p:new THREE.Vector3(DRN_X, Y.actTop+0.15, PMOS_ZC), layer:'active' },
-  { p:new THREE.Vector3(DRN_X, Y.metalTop-0.15, PMOS_ZC), layer:'metal' },
-  { p:new THREE.Vector3(DRN_X, Y.metalTop-0.15, 0), layer:'metal' }
+  { p:new THREE.Vector3(DRN_X, METAL_FLOW_Y, PMOS_ZC), layer:'metal' },
+  { p:new THREE.Vector3(DRN_X, METAL_FLOW_Y, 0), layer:'metal' }
 ];
 
 var NMOS_PATH_BASE = [
-  { p:new THREE.Vector3(DRN_X, Y.metalTop-0.15, 0), layer:'metal' },
-  { p:new THREE.Vector3(DRN_X, Y.metalTop-0.15, NMOS_ZC), layer:'metal' },
+  { p:new THREE.Vector3(DRN_X, METAL_FLOW_Y, 0), layer:'metal' },
+  { p:new THREE.Vector3(DRN_X, METAL_FLOW_Y, NMOS_ZC), layer:'metal' },
   { p:new THREE.Vector3(DRN_X, Y.actTop+0.15, NMOS_ZC), layer:'active' },
   { p:new THREE.Vector3(0,      Y.actTop+0.15, NMOS_ZC), layer:'active' },
   { p:new THREE.Vector3(SRC_X, Y.actTop+0.15, NMOS_ZC), layer:'active' },
-  { p:new THREE.Vector3(SRC_X, Y.metalTop-0.15, NMOS_ZC), layer:'metal' },
-  { p:new THREE.Vector3(SRC_X, Y.metalTop-0.15, -RAIL_Z), layer:'metal' }
+  { p:new THREE.Vector3(SRC_X, METAL_FLOW_Y, NMOS_ZC), layer:'metal' },
+  { p:new THREE.Vector3(SRC_X, METAL_FLOW_Y, -RAIL_Z), layer:'metal' }
 ];
 
 var SHOOT_THROUGH_PATH_BASE = [
-  { p:new THREE.Vector3(SRC_X, Y.metalTop-0.15, RAIL_Z), layer:'metal' },
-  { p:new THREE.Vector3(SRC_X, Y.metalTop-0.15, PMOS_ZC), layer:'metal' },
+  { p:new THREE.Vector3(SRC_X, METAL_FLOW_Y, RAIL_Z), layer:'metal' },
+  { p:new THREE.Vector3(SRC_X, METAL_FLOW_Y, PMOS_ZC), layer:'metal' },
   { p:new THREE.Vector3(SRC_X, Y.actTop+0.15, PMOS_ZC), layer:'active' },
   { p:new THREE.Vector3(0,      Y.actTop+0.15, PMOS_ZC), layer:'active' },
   { p:new THREE.Vector3(DRN_X, Y.actTop+0.15, PMOS_ZC), layer:'active' },
-  { p:new THREE.Vector3(DRN_X, Y.metalTop-0.15, PMOS_ZC), layer:'metal' },
-  { p:new THREE.Vector3(DRN_X, Y.metalTop-0.15, 0), layer:'metal' },
-  { p:new THREE.Vector3(DRN_X, Y.metalTop-0.15, NMOS_ZC), layer:'metal' },
+  { p:new THREE.Vector3(DRN_X, METAL_FLOW_Y, PMOS_ZC), layer:'metal' },
+  { p:new THREE.Vector3(DRN_X, METAL_FLOW_Y, 0), layer:'metal' },
+  { p:new THREE.Vector3(DRN_X, METAL_FLOW_Y, NMOS_ZC), layer:'metal' },
   { p:new THREE.Vector3(DRN_X, Y.actTop+0.15, NMOS_ZC), layer:'active' },
   { p:new THREE.Vector3(0,      Y.actTop+0.15, NMOS_ZC), layer:'active' },
   { p:new THREE.Vector3(SRC_X, Y.actTop+0.15, NMOS_ZC), layer:'active' },
-  { p:new THREE.Vector3(SRC_X, Y.metalTop-0.15, NMOS_ZC), layer:'metal' },
-  { p:new THREE.Vector3(SRC_X, Y.metalTop-0.15, -RAIL_Z), layer:'metal' }
+  { p:new THREE.Vector3(SRC_X, METAL_FLOW_Y, NMOS_ZC), layer:'metal' },
+  { p:new THREE.Vector3(SRC_X, METAL_FLOW_Y, -RAIL_Z), layer:'metal' }
 ];
 
 var pmosCurve, nmosCurve, shootThroughCurve;

@@ -366,14 +366,13 @@ function gaussianDopingMesh(w, h, d, colorVar, opts){
 }
 
 // ---------------------------------------------------------------------------
-// FILLETED TRACE GEOMETRY (Smooth IC Layout Interconnects)
+// FILLETED TRACE & PDK INTERCONNECT GEOMETRIES
 // ---------------------------------------------------------------------------
-// Extrudes planar Metal-1 routing traces with smoothly filleted corners,
-// rounded line ends, and beveled top/sidewall profiles to reflect
-// realistic optical-proximity corrected (OPC) planarized interconnects.
+// Extrudes planar Metal-1 routing traces with flat ribbon cross-section (3λ width : 1λ thickness),
+// rounded fillets (R = 1λ), 45-degree chamfered bends, and expanded octagonal contact landing pads.
 function createFilletedTraceGeometry(w, h, d, cornerRadius, bevel){
-  cornerRadius = Math.min(cornerRadius !== undefined ? cornerRadius : 0.14, Math.min(w, d) * 0.48);
-  bevel = Math.min(bevel !== undefined ? bevel : 0.035, Math.min(w, h, d) * 0.25);
+  cornerRadius = Math.min(cornerRadius !== undefined ? cornerRadius : 0.15, Math.min(w, d) * 0.48);
+  bevel = Math.min(bevel !== undefined ? bevel : 0.02, Math.min(w, h, d) * 0.25);
   var hw = w / 2;
   var hd = d / 2;
   var cr = cornerRadius;
@@ -392,11 +391,11 @@ function createFilletedTraceGeometry(w, h, d, cornerRadius, bevel){
   var extrudeSettings = {
     steps: 1,
     depth: Math.max(0.001, h - bevel * 2),
-    bevelEnabled: true,
+    bevelEnabled: bevel > 0,
     bevelThickness: bevel,
     bevelSize: bevel,
     bevelOffset: 0,
-    bevelSegments: 3
+    bevelSegments: 2
   };
   var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
   geo.rotateX(Math.PI / 2);
@@ -404,6 +403,98 @@ function createFilletedTraceGeometry(w, h, d, cornerRadius, bevel){
   return geo;
 }
 var createBeveledBoxGeometry = createFilletedTraceGeometry;
+
+// Expanded 5λ x 5λ octagonal via landing pad with 45-degree chamfered corners (1λ via enclosure rule)
+function createOctagonalViaPadGeometry(size, h, chamfer, bevel){
+  size = size || 0.75;           // 5λ = 0.75 (0.45 trace + 2 * 0.15 enclosure)
+  chamfer = chamfer || 0.15;     // 1λ = 0.15 45° chamfer
+  bevel = bevel !== undefined ? bevel : 0.02;
+  var hs = size / 2;             // 0.375
+  var c = Math.min(chamfer, hs * 0.6);
+
+  var shape = new THREE.Shape();
+  // 8-sided polygon with 45-degree chamfered corners
+  shape.moveTo(-hs + c, -hs);
+  shape.lineTo(hs - c, -hs);
+  shape.lineTo(hs, -hs + c);
+  shape.lineTo(hs, hs - c);
+  shape.lineTo(hs - c, hs);
+  shape.lineTo(-hs + c, hs);
+  shape.lineTo(-hs, hs - c);
+  shape.lineTo(-hs, -hs + c);
+  shape.closePath();
+
+  var extrudeSettings = {
+    steps: 1,
+    depth: Math.max(0.001, h - bevel * 2),
+    bevelEnabled: bevel > 0,
+    bevelThickness: bevel,
+    bevelSize: bevel,
+    bevelOffset: 0,
+    bevelSegments: 2
+  };
+  var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+  geo.rotateX(Math.PI / 2);
+  geo.center();
+  return geo;
+}
+
+// 45-degree chamfered T-junction bracket (1λ chamfer on 90-degree interconnect turns)
+function createChamferedTJunctionGeometry(branchDir, railW, branchW, chamfer, height, bevel){
+  railW = railW || 0.45;
+  branchW = branchW || 0.45;
+  chamfer = chamfer || 0.15;
+  height = height || 0.15;
+  bevel = bevel !== undefined ? bevel : 0.02;
+
+  var hwRail = railW / 2;
+  var hwBranch = branchW / 2;
+  var c = chamfer;
+  var armRail = hwBranch + c + 0.20;
+  var armBranch = hwRail + c + 0.20;
+
+  // Base 2D shape in X-Y plane: rail along Y, branch pointing along +X
+  var shape = new THREE.Shape();
+  shape.moveTo(-hwRail, armRail);
+  shape.lineTo(hwRail, armRail);
+  shape.lineTo(hwRail, hwBranch + c);
+  shape.lineTo(hwRail + c, hwBranch);        // 45° chamfer at upper turn
+  shape.lineTo(armBranch, hwBranch);
+  shape.lineTo(armBranch, -hwBranch);
+  shape.lineTo(hwRail + c, -hwBranch);
+  shape.lineTo(hwRail, -hwBranch - c);       // 45° chamfer at lower turn
+  shape.lineTo(hwRail, -armRail);
+  shape.lineTo(-hwRail, -armRail);
+  shape.closePath();
+
+  var extrudeSettings = {
+    steps: 1,
+    depth: Math.max(0.001, height - bevel * 2),
+    bevelEnabled: bevel > 0,
+    bevelThickness: bevel,
+    bevelSize: bevel,
+    bevelOffset: 0,
+    bevelSegments: 2
+  };
+  var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+  geo.rotateX(Math.PI / 2);
+
+  // Center bounding box on Y axis (vertical height)
+  geo.computeBoundingBox();
+  var bb = geo.boundingBox;
+  var midY_geo = (bb.min.y + bb.max.y) / 2;
+  geo.translate(0, -midY_geo, 0);
+
+  // Rotate to align with branch direction
+  if (branchDir === '-z'){
+    geo.rotateY(Math.PI / 2);
+  } else if (branchDir === '+z'){
+    geo.rotateY(-Math.PI / 2);
+  } else if (branchDir === '-x'){
+    geo.rotateY(Math.PI);
+  }
+  return geo;
+}
 
 // Procedural brushed metallic texture with directional micro-scratches
 var brushedMetalTexCache = null;
@@ -506,7 +597,7 @@ var Y = {
   oxideBot: 1.95, oxideTop: 1.985,  // thin chemical SiO2 interfacial oxide under the gates
   highkBot: 1.985, highkTop: 2.02,  // High-k HfO2 dielectric layer
   polyBot: 2.02, polyTop: 2.32,
-  metalBot: 2.95, metalTop: 3.25
+  metalBot: 2.95, metalTop: 3.10    // Flat ribbon aspect ratio: thickness = 0.15 = 1λ vs width = 0.45 = 3λ
 };
 
 var CH = { min:-1.0, max:1.0 };            // gate/channel — 2 units = 2λ gate length
@@ -712,10 +803,10 @@ contactAt(0, POLY_CT_Z, Y.polyTop, 'polyCt');
 contactAt(TAP_X, PMOS_ZC, Y.actTop, 'welltapCt');
 contactAt(TAP_X, NMOS_ZC, Y.actTop, 'subtapCt');
 
-// ---------- METAL-1 (Smooth Filleted Routes, Landing Pads & Realistic Metallic Shaders) ----------
-var metalH = Y.metalTop - Y.metalBot;
-var midY = (Y.metalTop + Y.metalBot) / 2;
-var METAL_W = 0.45;
+// ---------- METAL-1 (Flat Ribbon Routes, 45° Chamfered Bends, Landing Pads & Metallic Shaders) ----------
+var metalH = Y.metalTop - Y.metalBot; // 0.15 = 1λ (flat ribbon thickness)
+var midY = (Y.metalTop + Y.metalBot) / 2; // 3.025
+var METAL_W = 0.45; // 3λ wire width
 
 function metalBar(x0, x1, z0, z1, colorVar, id, cornerRadius){
   var w = Math.abs(x1 - x0) || METAL_W;
@@ -723,7 +814,7 @@ function metalBar(x0, x1, z0, z1, colorVar, id, cornerRadius){
   var finalW = Math.max(w, METAL_W);
   var finalD = Math.max(d, METAL_W);
 
-  var geo = createFilletedTraceGeometry(finalW, metalH, finalD, cornerRadius !== undefined ? cornerRadius : 0.16, 0.035);
+  var geo = createFilletedTraceGeometry(finalW, metalH, finalD, cornerRadius !== undefined ? cornerRadius : 0.15, 0.02);
   var mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(cssVar(colorVar)),
     metalness: 0.90,
@@ -742,14 +833,17 @@ function metalBar(x0, x1, z0, z1, colorVar, id, cornerRadius){
   return m;
 }
 
-// Rounded contact via landing pads (flared metal-1 enclosure around contact plugs)
+// Expanded 5λ x 5λ octagonal via landing pad (1λ PDK via enclosure rule on all sides)
 function metalViaPad(x, z, colorVar, parentId){
-  var padGeo = createFilletedTraceGeometry(0.70, metalH, 0.70, 0.32, 0.035);
+  var padGeo = createOctagonalViaPadGeometry(0.75, metalH, 0.15, 0.02);
   var mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(cssVar(colorVar)),
     metalness: 0.90,
     roughness: 0.20,
     roughnessMap: getBrushedMetalTexture(),
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
     emissive: 0x000000,
     emissiveIntensity: 0
   });
@@ -764,14 +858,17 @@ function metalViaPad(x, z, colorVar, parentId){
   return m;
 }
 
-// Smooth filleted T-junction transition pad
-function metalJunction(x, z, w, d, colorVar, parentId){
-  var juncGeo = createFilletedTraceGeometry(w, metalH, d, 0.22, 0.035);
+// 45-degree chamfered T-junction at 90° interconnect turns (prevents sharp rectangular bends)
+function metalJunction(x, z, branchDir, colorVar, parentId){
+  var juncGeo = createChamferedTJunctionGeometry(branchDir, METAL_W, METAL_W, 0.15, metalH, 0.02);
   var mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(cssVar(colorVar)),
     metalness: 0.90,
     roughness: 0.20,
     roughnessMap: getBrushedMetalTexture(),
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
     emissive: 0x000000,
     emissiveIntensity: 0
   });
@@ -790,9 +887,9 @@ function metalJunction(x, z, w, d, colorVar, parentId){
 metalBar(-9, 9, RAIL_Z, RAIL_Z, '--c-vdd', 'vddRail');
 metalBar(SRC_X, SRC_X, PMOS_ZC, RAIL_Z, '--c-vdd', 'vddStubPmos');
 metalBar(TAP_X, TAP_X, PMOS_ZC, RAIL_Z, '--c-vdd', 'vddStubTap');
-// VDD filleted junctions & via landings
-metalJunction(SRC_X, RAIL_Z, 0.85, 0.85, '--c-vdd', 'vddStubPmos');
-metalJunction(TAP_X, RAIL_Z, 0.85, 0.85, '--c-vdd', 'vddStubTap');
+// VDD 45-degree chamfered turns & expanded via landing pads
+metalJunction(SRC_X, RAIL_Z, '-z', '--c-vdd', 'vddStubPmos');
+metalJunction(TAP_X, RAIL_Z, '-z', '--c-vdd', 'vddStubTap');
 metalViaPad(SRC_X, PMOS_ZC, '--c-vdd', 'vddStubPmos');
 metalViaPad(TAP_X, PMOS_ZC, '--c-vdd', 'vddStubTap');
 
@@ -800,21 +897,21 @@ metalViaPad(TAP_X, PMOS_ZC, '--c-vdd', 'vddStubTap');
 metalBar(-9, 9, -RAIL_Z, -RAIL_Z, '--c-gnd', 'gndRail');
 metalBar(SRC_X, SRC_X, NMOS_ZC, -RAIL_Z, '--c-gnd', 'gndStubNmos');
 metalBar(TAP_X, TAP_X, NMOS_ZC, -RAIL_Z, '--c-gnd', 'gndStubTap');
-// GND filleted junctions & via landings
-metalJunction(SRC_X, -RAIL_Z, 0.85, 0.85, '--c-gnd', 'gndStubNmos');
-metalJunction(TAP_X, -RAIL_Z, 0.85, 0.85, '--c-gnd', 'gndStubTap');
+// GND 45-degree chamfered turns & expanded via landing pads
+metalJunction(SRC_X, -RAIL_Z, '+z', '--c-gnd', 'gndStubNmos');
+metalJunction(TAP_X, -RAIL_Z, '+z', '--c-gnd', 'gndStubTap');
 metalViaPad(SRC_X, NMOS_ZC, '--c-gnd', 'gndStubNmos');
 metalViaPad(TAP_X, NMOS_ZC, '--c-gnd', 'gndStubTap');
 
-// OUT
+// OUT spine + pin
 metalBar(DRN_X, DRN_X, PMOS_ZC, NMOS_ZC, '--c-out', 'outSpine');
 metalBar(DRN_X, DRN_X+3.5, 0, 0, '--c-out', 'outPin');
-// OUT filleted junction & via landings
-metalJunction(DRN_X, 0, 0.90, 0.90, '--c-out', 'outSpine');
+// OUT 45-degree chamfered turn & expanded via landing pads
+metalJunction(DRN_X, 0, '+x', '--c-out', 'outSpine');
 metalViaPad(DRN_X, PMOS_ZC, '--c-out', 'outSpine');
 metalViaPad(DRN_X, NMOS_ZC, '--c-out', 'outSpine');
 
-// IN
+// IN pin + poly via landing pad
 metalBar(0, 0, POLY_CT_Z, POLY_CT_Z+0.9, '--c-in', 'inPin');
 metalViaPad(0, POLY_CT_Z, '--c-in', 'inPin');
 

@@ -33,7 +33,8 @@ var DIM_RULES = [
   { key:'activeDepth',   label:'Source/Drain junction depth', lambda:1.5 },
   { key:'oxideThickness',label:'Gate oxide thickness (tOX)',  note:'~2 nm equivalent, illustrative — exaggerated in the model for visibility.' },
   { key:'polyThickness', label:'Poly gate height',            lambda:3 },
-  { key:'metalThickness',label:'Metal-1 thickness',           lambda:3 },
+  { key:'metalThickness',label:'Metal-1 thickness (flat ribbon)', lambda:1 },
+  { key:'viaOverlap',    label:'Metal-1 via enclosure (overlap)', lambda:1 },
   { key:'contactHeight', label:'Contact / via height',        lambda:4 }
 ];
 var currentLambdaNm = 90;
@@ -79,10 +80,10 @@ var DIM_MAP = {
   pmosSrcCt:['contactSize','contactHeight'], pmosDrnCt:['contactSize','contactHeight'],
   nmosSrcCt:['contactSize','contactHeight'], nmosDrnCt:['contactSize','contactHeight'],
   polyCt:['contactSize','contactHeight'], welltapCt:['contactSize','contactHeight'], subtapCt:['contactSize','contactHeight'],
-  vddRail:['metalWidth','metalThickness'], gndRail:['metalWidth','metalThickness'], inPin:['metalWidth','metalThickness'],
-  outPin:['metalWidth','metalThickness'], outSpine:['metalWidth','metalThickness'],
-  vddStubPmos:['metalWidth','metalThickness'], vddStubTap:['metalWidth','metalThickness'],
-  gndStubNmos:['metalWidth','metalThickness'], gndStubTap:['metalWidth','metalThickness'],
+  vddRail:['metalWidth','metalThickness'], gndRail:['metalWidth','metalThickness'], inPin:['metalWidth','metalThickness','viaOverlap'],
+  outPin:['metalWidth','metalThickness'], outSpine:['metalWidth','metalThickness','viaOverlap'],
+  vddStubPmos:['metalWidth','metalThickness','viaOverlap'], vddStubTap:['metalWidth','metalThickness','viaOverlap'],
+  gndStubNmos:['metalWidth','metalThickness','viaOverlap'], gndStubTap:['metalWidth','metalThickness','viaOverlap'],
   nwell:['wellOverlap','wellSpacing','wellDepth'], pwell:['wellOverlap','wellSpacing','wellDepth'], welltapAct:['wellOverlap'], subtapAct:['wellOverlap'],
   psub:['substrateDepth']
 };
