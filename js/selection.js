@@ -22,6 +22,9 @@ function clearSelection(){
   lastSelectedId = null;
   document.querySelectorAll('#tree .node.selected').forEach(function(n){ n.classList.remove('selected'); });
   document.getElementById('crumb-sel').textContent = '';
+  if (typeof window.clearVoiceAssistantContext === 'function'){
+    window.clearVoiceAssistantContext();
+  }
 }
 
 function highlightMeshes(meshes){
@@ -102,6 +105,9 @@ document.getElementById('pop-close').addEventListener('click', function(e){
   hidePopover();
   document.getElementById('inspector').innerHTML = '<div class="empty">Select a layer, region, or tree node to inspect its function, electrical role, and physical relationships.</div>';
   document.getElementById('crumb-sel').textContent = '';
+  if (typeof window.clearVoiceAssistantContext === 'function'){
+    window.clearVoiceAssistantContext();
+  }
 });
 
 function selectById(id){
@@ -116,6 +122,9 @@ function selectById(id){
   document.querySelectorAll('#tree .node').forEach(function(n){
     if (n.dataset.id === id) n.classList.add('selected');
   });
+  if (typeof window.updateVoiceAssistantContext === 'function'){
+    window.updateVoiceAssistantContext(id, info);
+  }
 }
 
 // raycaster click — hitting the model selects + anchors the popover;

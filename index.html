@@ -250,6 +250,92 @@
         </div>
       </div>
 
+      <!-- AI Voice Assistant Widget (Sarvam Bulbul v4 Flash) -->
+      <div id="voice-assistant-widget" class="va-widget">
+        <div class="va-header">
+          <div class="va-header-title">
+            <span class="va-pulse-icon">🎙️</span>
+            <b>AI VOICE TUTOR</b>
+            <span class="va-badge">bulbul:v4-flash</span>
+          </div>
+          <div class="va-header-controls">
+            <div class="va-visualizer" id="va-visualizer" title="Audio waveform">
+              <span class="bar"></span>
+              <span class="bar"></span>
+              <span class="bar"></span>
+              <span class="bar"></span>
+              <span class="bar"></span>
+            </div>
+            <button class="va-hdr-btn" id="va-btn-minimize" title="Minimize assistant" aria-label="Minimize">─</button>
+            <button class="va-hdr-btn" id="va-btn-close" title="Close assistant" aria-label="Close">✕</button>
+          </div>
+        </div>
+
+        <div class="va-context-bar">
+          <div class="va-ctx-line">
+            <span class="va-ctx-tag">CONTEXT</span>
+            <span class="va-ctx-val" id="va-ctx-val">None (Full Layout)</span>
+          </div>
+          <div class="va-ctx-state" id="va-ctx-state">IN=0 → PMOS ON · OUT=1</div>
+        </div>
+
+        <div class="va-settings-row">
+          <div class="va-setting-group">
+            <label for="va-lang-select">LANGUAGE</label>
+            <select id="va-lang-select" class="va-select">
+              <option value="en-IN" selected>English (en-IN)</option>
+              <option value="hi-IN">हिन्दी (hi-IN)</option>
+              <option value="te-IN">తెలుగు (te-IN)</option>
+            </select>
+          </div>
+          <div class="va-setting-group">
+            <label for="va-speaker-select">PERSONA</label>
+            <select id="va-speaker-select" class="va-select">
+              <option value="aparna_en_edtech" selected>Aparna (EdTech Tutor)</option>
+              <option value="aparna_en_companion">Aparna (Companion)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="va-status-bar">
+          <div class="va-status-pill ready" id="va-status-pill">
+            <span class="va-status-dot"></span>
+            <span class="va-status-text" id="va-status-text">AI Tutor Ready</span>
+          </div>
+          <button class="va-stop-btn" id="va-btn-stop" title="Stop audio playback" disabled>⏹ Stop</button>
+        </div>
+
+        <div class="va-chips-scroll">
+          <button class="va-chip" id="va-chip-selected" style="display:none;" data-q="">Explain Selected</button>
+          <button class="va-chip" data-q="Why is the gate oxide so thin in this inverter?">Why thin oxide?</button>
+          <button class="va-chip" data-q="Explain N-WELL isolation and the well tap role.">N-WELL isolation</button>
+          <button class="va-chip" data-q="How does this CMOS inverter switch between 0 and 1?">How it switches</button>
+          <button class="va-chip" data-q="Explain the purpose of SDE and LDD regions.">SDE / LDD role</button>
+        </div>
+
+        <div class="va-response-area" id="va-response-area">
+          <div class="va-msg va-msg-ai">
+            <div class="va-msg-header">Sarvam AI Tutor</div>
+            <div class="va-msg-body">
+              Welcome to the CMOS AI Voice Tutor! Ask any question about VLSI layout, lambda design rules, or transistor physics. Click any layer in 3D to ask contextual questions in English, Hindi, or Telugu.
+            </div>
+          </div>
+        </div>
+
+        <div class="va-input-row">
+          <input type="text" id="va-input-text" placeholder="Ask about this layer or circuit..." autocomplete="off">
+          <button id="va-btn-mic" class="va-mic-btn" title="Voice Input (Mic)">🎙️</button>
+          <button id="va-btn-send" class="va-send-btn" title="Ask and listen">Ask & Speak 🔊</button>
+        </div>
+      </div>
+
+      <!-- Minimized Floating Launcher Button -->
+      <button id="va-launcher-btn" class="va-launcher-btn" title="Open AI Voice Tutor">
+        <span class="va-launcher-icon">🎙️</span>
+        <span class="va-launcher-title">AI Voice Tutor</span>
+        <span class="va-launcher-badge">bulbul:v4-flash</span>
+      </button>
+
     </div>
 
     <div id="right-panel">
@@ -296,6 +382,7 @@
 <script src="js/build-anim.js"></script>
 <script src="js/render-loop.js"></script>
 <script src="js/main.js"></script>
+<script src="js/voice-assistant.js"></script>
 
 </body>
 </html>

@@ -1,0 +1,219 @@
+/**
+ * api/voice-assistant.js
+ * Vercel Serverless Function & Node backend handler for Sarvam AI Voice Tutor.
+ * 
+ * 1. Accepts user question, current CMOS layout context, language_code, and speaker persona.
+ * 2. Queries Sarvam AI chat completions (sarvam-105b-conversations) to generate a crisp,
+ *    student-friendly 2-3 sentence VLSI explanation.
+ * 3. Streams text into Sarvam AI streaming TTS (bulbul:v4-flash) at 24kHz.
+ * 4. Progressive streaming of audio/wav chunks back to the client with X-Explanation-Text header.
+ */
+
+const SARVAM_API_KEY = process.env.SARVAM_API_KEY || 'sk_rz1l4gj4_NJv1arqPEbELRJOs53y5woaW';
+
+// Valid speaker personas for Sarvam Bulbul v4 Flash
+const SPEAKER_MAP = {
+  'en-IN': {
+    default: 'aparna_en_edtech',
+    valid: ['aparna_en_edtech', 'aparna_en_companion']
+  },
+  'hi-IN': {
+    default: 'aparna_hi_customer',
+    valid: ['aparna_hi_customer', 'shubh_hi_customer', 'ritu_hi_customer']
+  },
+  'te-IN': {
+    default: 'kavitha_te_narration',
+    valid: ['kavitha_te_narration']
+  }
+};
+
+/**
+ * Fallback deterministic explanation in case LLM is unreachable
+ */
+function getFallbackExplanation(question, context, lang) {
+  const comp = context && context.title ? context.title : 'CMOS Inverter';
+  const role = context && context.role ? context.role : 'Complementary MOSFET logic inversion.';
+  const state = context && context.circuitState ? `Input is ${context.circuitState.in}, PMOS is ${context.circuitState.pmos}, NMOS is ${context.circuitState.nmos}, and Output is ${context.circuitState.out}.` : '';
+
+  if (lang === 'hi-IN') {
+    return `${comp} सीमॉस इन्वर्टर का एक आवश्यक हिस्सा है। यह ${role} वर्तमान स्थिति में, ${state}`;
+  } else if (lang === 'te-IN') {
+    return `${comp} అనేది సిమోస్ ఇన్వర్టర్‌లో కీలకమైన భాగం. ఇది ${role} ప్రస్తుత స్థితిలో, ${state}`;
+  } else {
+    return `${comp} is an essential physical element in this CMOS inverter layout. It functions to ${role} Under the current logic state, ${state}`;
+  }
+}
+
+/**
+ * Generate student-friendly VLSI explanation via Sarvam LLM
+ */
+async function generateExplanation(question, context, langCode) {
+  const langName = langCode === 'hi-IN' ? 'Hindi (hi-IN)' : (langCode === 'te-IN' ? 'Telugu (te-IN)' : 'English (en-IN)');
+  
+  const systemPrompt = `You are an expert CMOS VLSI tutor and layout educator for an interactive 3D CMOS Inverter CAD viewer.
+Provide a crisp, clear, student-friendly explanation (2 to 3 concise sentences maximum, ~45-65 words) in ${langName} that directly answers the user's question using the provided component metadata, lambda design rules, and circuit state.
+Never use markdown formatting, bold asterisks, bullet points, numbered lists, or awkward raw equations that sound unnatural when spoken aloud. Use natural conversational phrasing specifically crafted for voice speech synthesis in ${langName}.`;
+
+  const ctxSummary = context ? [
+    context.title ? `Selected Component: ${context.title}` : null,
+    context.fn ? `Function: ${context.fn}` : null,
+    context.role ? `Electrical Role: ${context.role}` : null,
+    context.rel ? `Physical Relationship: ${context.rel}` : null,
+    context.doping ? `Doping: ${context.doping}` : null,
+    context.dimensions ? `Dimensions: ${typeof context.dimensions === 'string' ? context.dimensions : JSON.stringify(context.dimensions)}` : null,
+    context.circuitState ? `Current Circuit State: IN=${context.circuitState.in}, PMOS=${context.circuitState.pmos}, NMOS=${context.circuitState.nmos}, OUT=${context.circuitState.out}` : null
+  ].filter(Boolean).join('\n') : 'No specific component selected; full inverter layout.';
+
+  const userPrompt = `Layout & Circuit Context:
+${ctxSummary}
+
+User Question: ${question || 'Explain the role and physics of this component in the CMOS inverter.'}`;
+
+  try {
+    const chatRes = await fetch('https://api.sarvam.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-subscription-key': SARVAM_API_KEY
+      },
+      body: JSON.stringify({
+        model: 'sarvam-105b-conversations',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 160,
+        temperature: 0.3
+      })
+    });
+
+    if (chatRes.ok) {
+      const data = await chatRes.json();
+      if (data.choices && data.choices[0] && data.choices[0].message) {
+        let text = data.choices[0].message.content.trim();
+        // Strip any residual markdown asterisks or quotes
+        text = text.replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim();
+        if (text.length > 5) return text;
+      }
+    } else {
+      console.warn('Sarvam chat completion returned non-200:', chatRes.status, await chatRes.text());
+    }
+  } catch (err) {
+    console.error('Sarvam chat completion fetch error:', err);
+  }
+
+  return getFallbackExplanation(question, context, langCode);
+}
+
+/**
+ * Main Serverless Function Handler
+ */
+module.exports = async function handler(req, res) {
+  // CORS Configuration
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, api-subscription-key');
+  res.setHeader('Access-Control-Expose-Headers', 'X-Explanation-Text, X-Language-Code, X-Speaker, X-Audio-Model');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      status: 'online',
+      service: 'CMOS Inverter CAD AI Voice Assistant',
+      tts_model: 'bulbul:v4-flash',
+      llm_model: 'sarvam-105b-conversations',
+      supported_languages: ['en-IN', 'hi-IN', 'te-IN'],
+      speakers: SPEAKER_MAP
+    });
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  // Parse body
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch(e) {}
+  } else if (!body) {
+    body = await new Promise((resolve) => {
+      let data = '';
+      req.on('data', chunk => { data += chunk; });
+      req.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch(e) { resolve({}); }
+      });
+    });
+  }
+
+  const question = (body.question || '').trim();
+  const context = body.context || {};
+  let langCode = body.language_code || 'en-IN';
+  if (!SPEAKER_MAP[langCode]) langCode = 'en-IN';
+
+  let speaker = body.speaker;
+  const langConfig = SPEAKER_MAP[langCode];
+  if (!speaker || !langConfig.valid.includes(speaker)) {
+    speaker = langConfig.default;
+  }
+
+  try {
+    // 1. Generate text explanation from LLM
+    const explanationText = await generateExplanation(question, context, langCode);
+
+    // 2. Stream audio from Sarvam Bulbul v4 Flash
+    const ttsRes = await fetch('https://api.sarvam.ai/text-to-speech/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-subscription-key': SARVAM_API_KEY
+      },
+      body: JSON.stringify({
+        text: explanationText,
+        model: 'bulbul:v4-flash',
+        language_code: langCode,
+        speaker: speaker,
+        speech_sample_rate: 24000,
+        output_audio_codec: 'wav',
+        pace: 1.0,
+        enable_preprocessing: true
+      })
+    });
+
+    if (!ttsRes.ok) {
+      const errText = await ttsRes.text();
+      console.error('Sarvam TTS error:', ttsRes.status, errText);
+      return res.status(ttsRes.status).json({
+        error: 'Sarvam TTS streaming failed',
+        details: errText,
+        text: explanationText
+      });
+    }
+
+    // 3. Set response headers so frontend gets transcript + metadata immediately
+    res.setHeader('Content-Type', 'audio/wav');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('X-Explanation-Text', encodeURIComponent(explanationText));
+    res.setHeader('X-Language-Code', langCode);
+    res.setHeader('X-Speaker', speaker);
+    res.setHeader('X-Audio-Model', 'bulbul:v4-flash');
+
+    // 4. Pipe streaming chunks to response
+    const reader = ttsRes.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(value);
+    }
+    res.end();
+
+  } catch (err) {
+    console.error('Voice assistant handler error:', err);
+    if (!res.headersSent) {
+      return res.status(500).json({ error: 'Voice assistant failed', message: err.message });
+    }
+    res.end();
+  }
+};

@@ -52,6 +52,12 @@ function applyLogicState(){
     [pmosAct.src, pmosAct.drn, pmosAct.srcSde, pmosAct.drnSde].forEach(function(m){ if (m) setOnOffTint(m, pmosOn); });
     [nmosAct.src, nmosAct.drn, nmosAct.srcSde, nmosAct.drnSde].forEach(function(m){ if (m) setOnOffTint(m, nmosOn); });
   }
+
+  if (typeof lastSelectedId !== 'undefined' && lastSelectedId && typeof window.updateVoiceAssistantContext === 'function'){
+    window.updateVoiceAssistantContext(lastSelectedId, idToInfo(lastSelectedId));
+  } else if (typeof window.clearVoiceAssistantContext === 'function'){
+    window.clearVoiceAssistantContext();
+  }
 }
 
 function setOnOffTint(mesh, state){

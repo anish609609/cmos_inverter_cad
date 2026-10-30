@@ -1,0 +1,21 @@
+{
+  "name": "cmos-inverter-cad",
+  "version": "1.0.0",
+  "description": "Interactive 3D Physical CMOS Inverter Layout Viewer with Sarvam AI Voice Assistant",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "cmos",
+    "cad",
+    "vlsi",
+    "threejs",
+    "sarvam-ai",
+    "voice-assistant",
+    "bulbul"
+  ],
+  "author": "Raydurg Anish",
+  "license": "MIT"
+}
