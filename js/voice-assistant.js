@@ -37,6 +37,7 @@
   };
 
   // ---- State ----
+  var SARVAM_DIRECT_KEY = 'sk_rz1l4gj4_NJv1arqPEbELRJOs53y5woaW';
   var currentLang = 'en-IN';
   var currentSpeaker = 'aparna_en_edtech';
   var activeContext = null;
@@ -284,6 +285,70 @@
   // STREAMING QUERY & PROGRESSIVE WEB AUDIO QUEUE
   // =========================================================================
 
+  async function generateDirectExplanation(question, context, langCode){
+    var langName = (langCode === 'hi-IN') ? 'Hindi (hi-IN)' : ((langCode === 'te-IN') ? 'Telugu (te-IN)' : 'English (en-IN)');
+    var systemPrompt = 'You are an expert CMOS VLSI tutor and layout educator for an interactive 3D CMOS Inverter CAD viewer. ' +
+      'Provide a crisp, clear, student-friendly explanation (2 to 3 concise sentences maximum, ~45-65 words) in ' + langName + ' that directly answers the user\'s question using the provided component metadata, lambda design rules, and circuit state. ' +
+      'Never use markdown formatting, bold asterisks, bullet points, numbered lists, or awkward raw equations that sound unnatural when spoken aloud. Use natural conversational phrasing specifically crafted for voice speech synthesis in ' + langName + '.';
+
+    var ctxSummary = context ? [
+      context.title ? ('Selected Component: ' + context.title) : null,
+      context.fn ? ('Function: ' + context.fn) : null,
+      context.role ? ('Electrical Role: ' + context.role) : null,
+      context.rel ? ('Physical Relationship: ' + context.rel) : null,
+      context.doping ? ('Doping: ' + context.doping) : null,
+      context.dimensions ? ('Dimensions: ' + (typeof context.dimensions === 'string' ? context.dimensions : JSON.stringify(context.dimensions))) : null,
+      context.circuitState ? ('Current Circuit State: IN=' + context.circuitState.in + ', PMOS=' + context.circuitState.pmos + ', NMOS=' + context.circuitState.nmos + ', OUT=' + context.circuitState.out) : null
+    ].filter(Boolean).join('\n') : 'No specific component selected; full inverter layout.';
+
+    var userPrompt = 'Layout & Circuit Context:\n' + ctxSummary + '\n\nUser Question: ' + (question || 'Explain the role and physics of this component in the CMOS inverter.');
+
+    try {
+      var res = await fetch('https://api.sarvam.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-subscription-key': SARVAM_DIRECT_KEY
+        },
+        body: JSON.stringify({
+          model: 'sarvam-105b-conversations',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 160,
+          temperature: 0.3
+        })
+      });
+
+      if (res.ok) {
+        var data = await res.json();
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+          var text = data.choices[0].message.content.trim().replace(/[*_#`]/g, '').replace(/\s+/g, ' ');
+          if (text.length > 5) return text;
+        }
+      }
+    } catch(err) {
+      console.warn('[VoiceAssistant] Direct chat completion error:', err);
+    }
+
+    return getLocalFallbackExplanation(context, langCode);
+  }
+
+  function getLocalFallbackExplanation(context, langCode){
+    var comp = context && context.title ? context.title : 'CMOS Inverter';
+    var role = context && context.role ? context.role : 'performing digital logic inversion.';
+    var state = context && context.circuitState ? ('Input is ' + context.circuitState.in + ', PMOS is ' + context.circuitState.pmos + ', NMOS is ' + context.circuitState.nmos + ', and Output is ' + context.circuitState.out + '.') : '';
+
+    if (langCode === 'hi-IN'){
+      return comp + ' सीमॉस इन्वर्टर का एक अनिवार्य भाग है। यह ' + role + ' वर्तमान स्थिति में, ' + state;
+    } else if (langCode === 'te-IN'){
+      return comp + ' అనేది సిమోస్ ఇన్వర్టర్‌లో కీలకమైన భాగం. ఇది ' + role + ' ప్రస్తుత స్థితిలో, ' + state;
+    } else {
+      return comp + ' is an essential physical element in this CMOS inverter layout. It functions to ' + role + ' Under the current logic state, ' + state;
+    }
+  }
+
   async function askVoiceAssistant(queryText){
     var text = (queryText || '').trim();
     if (!text && !activeContext) return;
@@ -327,26 +392,60 @@
         speaker: currentSpeaker
       };
 
-      var response = await fetch('/api/voice-assistant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok){
-        var errInfo = await response.text();
-        throw new Error('Server returned ' + response.status + ': ' + errInfo);
-      }
-
-      // Read transcript from custom header
       var explanationText = '';
-      var rawHeaderText = response.headers.get('x-explanation-text');
-      if (rawHeaderText){
-        try { explanationText = decodeURIComponent(rawHeaderText); } catch(e){ explanationText = rawHeaderText; }
+      var reader = null;
+      var backendSuccess = false;
+
+      // 1. Try backend serverless route first
+      try {
+        var response = await fetch('/api/voice-assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok && response.body) {
+          var rawHeaderText = response.headers.get('x-explanation-text');
+          if (rawHeaderText) {
+            try { explanationText = decodeURIComponent(rawHeaderText); } catch(e){ explanationText = rawHeaderText; }
+          }
+          reader = response.body.getReader();
+          backendSuccess = true;
+        }
+      } catch (backendErr) {
+        console.log('[VoiceAssistant] Backend route unavailable (' + backendErr.message + '), falling back to direct Sarvam AI engine.');
       }
 
-      // Read binary chunk stream from Sarvam Bulbul v4 Flash
-      var reader = response.body.getReader();
+      // 2. Direct browser-to-Sarvam engine fallback if backend route is unavailable (e.g. static hosting, Live Server)
+      if (!backendSuccess) {
+        updateStatus('thinking', 'Thinking...');
+        explanationText = await generateDirectExplanation(text, activeContext, currentLang);
+
+        updateStatus('synthesizing', 'Synthesizing audio...');
+        var ttsRes = await fetch('https://api.sarvam.ai/text-to-speech/stream', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'api-subscription-key': SARVAM_DIRECT_KEY
+          },
+          body: JSON.stringify({
+            text: explanationText,
+            model: 'bulbul:v4-flash',
+            language_code: currentLang,
+            speaker: currentSpeaker,
+            speech_sample_rate: 24000,
+            output_audio_codec: 'wav',
+            pace: 1.0,
+            enable_preprocessing: true
+          })
+        });
+
+        if (!ttsRes.ok) {
+          var errDetail = await ttsRes.text();
+          throw new Error('Sarvam TTS error ' + ttsRes.status + ': ' + errDetail);
+        }
+        reader = ttsRes.body.getReader();
+      }
       var rawChunks = [];
       var totalBytes = 0;
       var chunkIndex = 0;
