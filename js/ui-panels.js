@@ -70,6 +70,7 @@ function renderTree(nodes, depth){
     var row = document.createElement('div');
     row.className = 'node';
     row.dataset.id = n.id || '';
+    row.dataset.label = n.label || '';
     var bullet = n.children ? '▸' : '·';
     row.innerHTML = '<span class="bullet">'+bullet+'</span><span>'+n.label+'</span>';
     if (n.id){

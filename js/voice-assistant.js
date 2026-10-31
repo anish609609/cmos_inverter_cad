@@ -102,6 +102,7 @@
   var currentAudioUrl = null;
   var currentAudioText = null;
   var currentActivePlayBtn = null;
+  var activeNarrationPromiseResolve = null;
   var narrationAudioCache = {}; // lang:text -> { blob, base64 }
 
   // Modal DOM Elements & Callback
@@ -154,6 +155,11 @@
   function stopAudioPlayback(){
     // Immediately invalidate all pending async loops, scheduled audio buffers, and tokens
     currentPlaybackToken++;
+
+    if (activeNarrationPromiseResolve){
+      try { activeNarrationPromiseResolve(); } catch(e){}
+      activeNarrationPromiseResolve = null;
+    }
 
     // 1. Abort in-flight network requests
     if (currentAbortController){
@@ -773,10 +779,27 @@
   // STEP-BY-STEP CMOS BUILD ANIMATION NARRATION (45–60 SECOND DYNAMIC SEQUENCE)
   // =========================================================================
 
+  window.prefetchVoiceAudio = function(textDict){
+    var text = (typeof textDict === 'object' && textDict) ? (textDict[currentLang] || textDict['en-IN'] || textDict.text) : textDict;
+    if (!text || !getSavedApiKey()) return Promise.resolve(null);
+    var cacheKey = currentLang + ':' + text;
+    if (narrationAudioCache[cacheKey]) return Promise.resolve(narrationAudioCache[cacheKey]);
+    return fetchSarvamTtsAudio(text, currentLang, currentSpeaker)
+      .then(function(res){
+        narrationAudioCache[cacheKey] = res;
+        return res;
+      })
+      .catch(function(err){
+        console.warn('[VoiceAssistant] Prefetch error:', err);
+        return null;
+      });
+  };
+
   window.prefetchNarrationSteps = function(steps){
     if (!Array.isArray(steps) || !getSavedApiKey()) return;
     steps.forEach(function(step){
-      var text = (typeof step.narration === 'object' && step.narration) ? (step.narration[currentLang] || step.narration['en-IN']) : step.narration;
+      var scriptObj = step.script || step.narration;
+      var text = (typeof scriptObj === 'object' && scriptObj) ? (scriptObj[currentLang] || scriptObj['en-IN']) : scriptObj;
       if (!text) return;
       var cacheKey = currentLang + ':' + text;
       if (narrationAudioCache[cacheKey]) return;
@@ -791,91 +814,111 @@
   };
 
   window.playVoiceNarration = function(stepIndex, title, textDict, durationSec, onEndedCallback){
-    var text = (typeof textDict === 'object' && textDict) ? (textDict[currentLang] || textDict['en-IN'] || textDict.text) : textDict;
-    if (!text){
-      if (typeof onEndedCallback === 'function'){
-        try { onEndedCallback(); } catch(e){}
-      }
-      return;
-    }
-
-    // Check if Sarvam API key exists in localStorage before initiating narration
-    if (!getSavedApiKey()){
-      if (typeof isBuildAnimating !== 'undefined' && isBuildAnimating && typeof pauseBuildAnimation === 'function'){
-        pauseBuildAnimation();
-      }
-      openApiKeyModal(function(){
-        if (typeof isBuildAnimating !== 'undefined' && isBuildAnimating && typeof resumeBuildAnimation === 'function'){
-          resumeBuildAnimation();
+    return new Promise(function(resolve){
+      var isResolved = false;
+      function onDone(){
+        if (isResolved) return;
+        isResolved = true;
+        activeNarrationPromiseResolve = null;
+        if (typeof onEndedCallback === 'function'){
+          try { onEndedCallback(); } catch(e){}
         }
-        window.playVoiceNarration(stepIndex, title, textDict, durationSec, onEndedCallback);
-      });
-      return;
-    }
+        resolve();
+      }
+      activeNarrationPromiseResolve = onDone;
 
-    // Immediately halt all existing playback and cancel any in-flight requests
-    stopAudioPlayback();
-    var thisToken = ++currentPlaybackToken;
-    currentAbortController = new AbortController();
-    var signal = currentAbortController.signal;
+      var text = (typeof textDict === 'object' && textDict) ? (textDict[currentLang] || textDict['en-IN'] || textDict.text) : textDict;
+      if (!text){
+        onDone();
+        return;
+      }
 
-    currentAudioText = text;
-    isPlaying = true;
-    if (ctxVal) ctxVal.textContent = title;
-    updateStatus('speaking', 'Explaining ' + title + '...');
-    if (stopBtn) stopBtn.disabled = false;
-    if (playBtnEl){
-      playBtnEl.disabled = false;
-      playBtnEl.textContent = '⏸ Pause';
-    }
-
-    // Append in assistant message area with interactive Play/Pause button
-    var msgObj = appendMessage('ai', text);
-    var playBtn = msgObj ? msgObj.playBtn : null;
-    currentActivePlayBtn = playBtn;
-
-    // Check prefetch / narration cache
-    var cacheKey = currentLang + ':' + text;
-    var cached = narrationAudioCache[cacheKey];
-
-    if (cached && cached.blob){
-      var url = URL.createObjectURL(cached.blob);
-      setupAndPlayAudio(url, cached.blob, playBtn, text, thisToken, onEndedCallback);
-      return;
-    }
-
-    // Fetch audio from Sarvam TTS API
-    if (playBtn){
-      playBtn.innerHTML = '⏳ Loading...';
-      playBtn.disabled = true;
-    }
-
-    fetchSarvamTtsAudio(text, currentLang, currentSpeaker, signal)
-      .then(function(result){
-        if (thisToken !== currentPlaybackToken || signal.aborted) return;
-        narrationAudioCache[cacheKey] = result;
-        var url = URL.createObjectURL(result.blob);
-        setupAndPlayAudio(url, result.blob, playBtn, text, thisToken, onEndedCallback);
-      })
-      .catch(function(err){
-        if (thisToken !== currentPlaybackToken || signal.aborted) return;
-        console.error('[VoiceAssistant] Narration TTS error:', err);
-        if (playBtn){
-          playBtn.innerHTML = '▶ Play Audio';
-          playBtn.disabled = false;
+      // Check if Sarvam API key exists in localStorage before initiating narration
+      if (!getSavedApiKey()){
+        if (typeof isBuildAnimating !== 'undefined' && isBuildAnimating && typeof pauseBuildAnimation === 'function'){
+          pauseBuildAnimation();
         }
-        // Fallback visualizer timing if audio fails
-        startSyntheticVisualizer();
-        setTimeout(function(){
-          if (thisToken !== currentPlaybackToken) return;
-          if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId = null; }
-          resetVisualizer();
-          updateStatus('ready', 'AI Tutor Ready');
-          if (typeof onEndedCallback === 'function'){
-            try { onEndedCallback(); } catch(e){}
+        openApiKeyModal(function(){
+          if (typeof isBuildAnimating !== 'undefined' && isBuildAnimating && typeof resumeBuildAnimation === 'function'){
+            resumeBuildAnimation();
           }
-        }, (durationSec || 5.0) * 1000);
-      });
+          window.playVoiceNarration(stepIndex, title, textDict, durationSec, onDone);
+        });
+        return;
+      }
+
+      // Immediately halt all existing playback and cancel any in-flight requests
+      stopAudioPlayback();
+      activeNarrationPromiseResolve = onDone; // restore after stopAudioPlayback
+      var thisToken = ++currentPlaybackToken;
+      currentAbortController = new AbortController();
+      var signal = currentAbortController.signal;
+
+      currentAudioText = text;
+      isPlaying = true;
+      if (ctxVal) ctxVal.textContent = title;
+      updateStatus('speaking', 'Explaining ' + title + '...');
+      if (stopBtn) stopBtn.disabled = false;
+      if (playBtnEl){
+        playBtnEl.disabled = false;
+        playBtnEl.textContent = '⏸ Pause';
+      }
+
+      // Append in assistant message area with interactive Play/Pause button
+      var msgObj = appendMessage('ai', text);
+      var playBtn = msgObj ? msgObj.playBtn : null;
+      currentActivePlayBtn = playBtn;
+
+      // Check prefetch / narration cache
+      var cacheKey = currentLang + ':' + text;
+      var cached = narrationAudioCache[cacheKey];
+
+      if (cached && cached.blob){
+        var url = URL.createObjectURL(cached.blob);
+        setupAndPlayAudio(url, cached.blob, playBtn, text, thisToken, onDone);
+        return;
+      }
+
+      // Fetch audio from Sarvam TTS API
+      if (playBtn){
+        playBtn.innerHTML = '⏳ Loading...';
+        playBtn.disabled = true;
+      }
+
+      fetchSarvamTtsAudio(text, currentLang, currentSpeaker, signal)
+        .then(function(result){
+          if (thisToken !== currentPlaybackToken || signal.aborted){
+            onDone();
+            return;
+          }
+          narrationAudioCache[cacheKey] = result;
+          var url = URL.createObjectURL(result.blob);
+          setupAndPlayAudio(url, result.blob, playBtn, text, thisToken, onDone);
+        })
+        .catch(function(err){
+          if (thisToken !== currentPlaybackToken || signal.aborted){
+            onDone();
+            return;
+          }
+          console.error('[VoiceAssistant] Narration TTS error:', err);
+          if (playBtn){
+            playBtn.innerHTML = '▶ Play Audio';
+            playBtn.disabled = false;
+          }
+          // Fallback visualizer timing if audio fails
+          startSyntheticVisualizer();
+          setTimeout(function(){
+            if (thisToken !== currentPlaybackToken){
+              onDone();
+              return;
+            }
+            if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId = null; }
+            resetVisualizer();
+            updateStatus('ready', 'AI Tutor Ready');
+            onDone();
+          }, (durationSec || 5.0) * 1000);
+        });
+    });
   };
 
   window.pauseVoiceNarration = function(){
@@ -1692,6 +1735,26 @@
         setTimeout(updateWidgetRightOffset, 50);
       });
     }
+
+    window.getCurrentAssistantLang = function(){
+      return currentLang || 'en-IN';
+    };
+    window.getCurrentAssistantSpeaker = function(){
+      return currentSpeaker || 'aparna_en_edtech';
+    };
+    window.notifyTourAudioStart = function(text){
+      isPlaying = true;
+      updateStatus('speaking', 'Speaking tour...');
+      startSyntheticVisualizer();
+      if (stopBtn) stopBtn.disabled = false;
+    };
+    window.notifyTourAudioEnd = function(){
+      isPlaying = false;
+      if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId = null; }
+      resetVisualizer();
+      updateStatus('ready', 'AI Tutor Ready');
+      if (stopBtn) stopBtn.disabled = true;
+    };
 
     console.log('[VoiceAssistant] Sarvam AI Bulbul v4 Flash Voice Assistant initialized.');
   }

@@ -116,6 +116,116 @@
   .tbtn.active:hover{ box-shadow:0 0 10px rgba(95,217,196,.4); }
   .tbtn.warn.active{ background:var(--warn); border-color:var(--warn); }
 
+  /* ---------- Highlighted 3D Tour Play Button ---------- */
+  #btn-build-anim,
+  .tbtn-play-tour {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: linear-gradient(135deg, rgba(95, 217, 196, 0.18) 0%, rgba(95, 217, 196, 0.06) 100%);
+    border: 1px solid rgba(95, 217, 196, 0.65);
+    color: var(--accent);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 7px 13px;
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(95, 217, 196, 0.28), 0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+  }
+
+  /* Pulsing ambient glow to make the button stand out immediately */
+  #btn-build-anim:not(.active) {
+    animation: tourBtnGlow 2.8s ease-in-out infinite;
+  }
+
+  @keyframes tourBtnGlow {
+    0%, 100% {
+      box-shadow: 0 0 10px rgba(95, 217, 196, 0.25), 0 2px 6px rgba(0, 0, 0, 0.25);
+      border-color: rgba(95, 217, 196, 0.55);
+    }
+    50% {
+      box-shadow: 0 0 20px 3px rgba(95, 217, 196, 0.6), 0 3px 12px rgba(95, 217, 196, 0.4);
+      border-color: rgba(95, 217, 196, 1);
+    }
+  }
+
+  /* Periodic high-tech shimmer sweep across the button */
+  #btn-build-anim::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+    transform: skewX(-20deg);
+    pointer-events: none;
+    animation: tourBtnShimmer 4.5s ease-in-out infinite;
+  }
+
+  @keyframes tourBtnShimmer {
+    0%, 65% {
+      left: -100%;
+    }
+    100% {
+      left: 180%;
+    }
+  }
+
+  #btn-build-anim .play-icon {
+    font-size: 10px;
+    line-height: 1;
+    display: inline-block;
+    color: var(--accent);
+    filter: drop-shadow(0 0 4px var(--accent));
+    transition: transform 0.15s ease;
+  }
+
+  #btn-build-anim:hover {
+    background: linear-gradient(135deg, rgba(95, 217, 196, 0.3) 0%, rgba(95, 217, 196, 0.14) 100%);
+    border-color: #5fd9c4;
+    color: #ffffff;
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: 0 0 22px rgba(95, 217, 196, 0.65), 0 4px 14px rgba(0, 0, 0, 0.4);
+  }
+
+  #btn-build-anim:hover .play-icon {
+    color: #ffffff;
+    transform: scale(1.2);
+  }
+
+  #btn-build-anim:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  /* When active during 3D fabrication sequence */
+  #btn-build-anim.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #08110f;
+    font-weight: 700;
+    box-shadow: 0 0 18px rgba(95, 217, 196, 0.7), 0 2px 8px rgba(0, 0, 0, 0.3);
+    animation: none;
+  }
+
+  #btn-build-anim.active::before {
+    display: none;
+  }
+
+  #btn-build-anim.active .play-icon {
+    color: #08110f;
+    filter: none;
+  }
+
+  #btn-build-anim.active:hover {
+    background: #7ae4d2;
+    box-shadow: 0 0 24px rgba(95, 217, 196, 0.85);
+  }
+
   #topbar .spacer{ flex:1; }
   #topbar .right-cluster{ display:flex; align-items:center; gap:8px; }
 
@@ -163,6 +273,14 @@
     background:var(--panel); border:1px solid var(--accent-dim); color:var(--accent);
     font-size:16px; font-weight:700; line-height:1; display:flex; align-items:center; justify-content:center;
     letter-spacing:0; padding:0; transition:transform .18s ease, background .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  body.tour-running .panel-toggle,
+  body.tour-running #left-toggle,
+  body.tour-running #right-toggle {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
   }
   .panel-toggle .toggle-icon{
     display:block;
@@ -404,6 +522,7 @@
     #flow-caption{ font-size:8.5px; padding:3px 7px; max-width:70vw; white-space:normal; text-align:center; }
     .tbtn, .seg button{ font-size:10px; padding:6px 8px; }
     .brand span{ display:none; }
+    #btn-build-anim .play-extra{ display:none; }
   }
 
 
@@ -467,6 +586,61 @@
     color: #ffffff;
     background: var(--accent);
     border-color: var(--accent);
+  }
+
+  /* Light Theme overrides for highlighted tour button */
+  :root[data-theme="light"] #btn-build-anim,
+  :root[data-theme="light"] .tbtn-play-tour {
+    background: linear-gradient(135deg, rgba(13, 148, 136, 0.14) 0%, rgba(13, 148, 136, 0.04) 100%);
+    border: 1px solid rgba(13, 148, 136, 0.65);
+    color: #0d9488;
+    box-shadow: 0 0 10px rgba(13, 148, 136, 0.2), 0 2px 6px rgba(13, 148, 136, 0.1);
+  }
+
+  :root[data-theme="light"] #btn-build-anim:not(.active) {
+    animation: tourBtnGlowLight 2.8s ease-in-out infinite;
+  }
+
+  @keyframes tourBtnGlowLight {
+    0%, 100% {
+      box-shadow: 0 0 8px rgba(13, 148, 136, 0.2), 0 2px 4px rgba(0, 0, 0, 0.06);
+      border-color: rgba(13, 148, 136, 0.55);
+    }
+    50% {
+      box-shadow: 0 0 18px 2px rgba(13, 148, 136, 0.45), 0 3px 10px rgba(13, 148, 136, 0.25);
+      border-color: rgba(13, 148, 136, 1);
+    }
+  }
+
+  :root[data-theme="light"] #btn-build-anim .play-icon {
+    color: #0d9488;
+    filter: none;
+  }
+
+  :root[data-theme="light"] #btn-build-anim:hover {
+    background: linear-gradient(135deg, rgba(13, 148, 136, 0.25) 0%, rgba(13, 148, 136, 0.12) 100%);
+    border-color: #0d9488;
+    color: #0f172a;
+    box-shadow: 0 0 18px rgba(13, 148, 136, 0.45), 0 3px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  :root[data-theme="light"] #btn-build-anim:hover .play-icon {
+    color: #0f172a;
+  }
+
+  :root[data-theme="light"] #btn-build-anim.active {
+    background: #0d9488;
+    border-color: #0d9488;
+    color: #ffffff;
+    box-shadow: 0 0 16px rgba(13, 148, 136, 0.55);
+  }
+
+  :root[data-theme="light"] #btn-build-anim.active .play-icon {
+    color: #ffffff;
+  }
+
+  :root[data-theme="light"] #btn-build-anim.active:hover {
+    background: #0f766e;
   }
   :root[data-theme="light"] #left-panel,
   :root[data-theme="light"] #right-panel {

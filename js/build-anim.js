@@ -1,518 +1,828 @@
 /**
  * js/build-anim.js
- * Deliberate 45–60 Second CMOS Fabrication Animation Sequence
+ * COMPLETE REWRITE: Tour & Replay Controller, 3D Layer Sync, and Sarvam AI TTS Engine
  * 
- * Executes an event-driven sequential drop-in assembly following bottom-to-top lithography order.
- * Dynamically synchronized to the AI Voice Tutor using the HTML5 Audio `onended` event to eliminate
- * audio clipping. Features cohesive problem-and-solution storytelling narrative connecting
- * the physical requirement ("why") with the fabricated layer ("what").
+ * Architectural Rules:
+ * 1. ZERO ARROWS: Floating drawer arrows (< and >) and 3D current/electron flow vectors
+ *    are strictly hidden throughout the tour.
+ * 2. SINGLE AUDIO & RUN-ID: Only one global HTML5 Audio instance and one currentTourRunId
+ *    preventing overlapping voices, audio clipping, or parallel loops.
+ * 3. DEDICATED SARVAM TTS: Sends only short single-sentence strings (< 180 chars) to
+ *    Sarvam Bulbul v4 Flash and strictly awaits onended before advancing.
+ * 4. STRICT SEQUENTIAL LOOP: Executes Steps 1 to 8 one-by-one in an async loop awaiting
+ *    both the 700ms drop (restY + 2.5 -> restY) and the entire voiceover.
  */
 
 // =====================================================================
-// STATE & CONSTANTS
+// GLOBAL TOUR STATE
 // =====================================================================
+var currentTourRunId = 0;
+var tourAudioInstance = null;
+var isTourRunning = false;
+var isTourPaused = false;
 var isBuildAnimating = false;
 var isBuildPaused = false;
-var currentStepIdx = -1;
-var totalAnimTime = 0;
+var camLerp = null;
 
-var DROP_HEIGHT = 16.0;
-var DROP_DURATION = 1.35; // Seconds for physical drop
-var INTER_STEP_PAUSE = 0.50; // Natural storytelling pause after audio finishes (500ms)
-var MAX_TOTAL_DURATION = 65.0; // Maximum safety window (45–60s sequence)
+window.isTourRunning = false;
+window.isTourPaused = false;
+window.isBuildAnimating = false;
+window.isBuildPaused = false;
 
-var stepDropElapsed = 0;
-var isStepDropping = false;
-var stepAudioEnded = false;
-var stepPauseElapsed = 0;
-var currentCamLerp = null;
+const DROP_OFFSET = 2.5;
+const DROP_DURATION_MS = 700;
+const STEP_PAUSE_MS = 300;
 
-// Physical weight landing easing: cubic ease-out with subtle landing cushion
-function easeDrop(p){
-  p = Math.max(0, Math.min(1, p));
-  if (p < 0.74){
-    var u = p / 0.74;
-    return 1.025 * (1 - Math.pow(1 - u, 3));
-  } else {
-    var u = (p - 0.74) / 0.26;
-    return 1.025 - 0.025 * Math.sin(u * Math.PI * 0.5) * (1 - Math.pow(1 - u, 2));
-  }
-}
+// In-memory cache for fetched audio blobs (text -> Blob)
+const stepAudioCache = new Map();
 
-// 7 deliberate fabrication steps in bottom-to-top lithographic order
-var buildSteps = [];
-
-function initBuildSteps(){
-  if (buildSteps.length > 0) return;
-
-  function getMeshes(groupKey){
-    if (typeof groups === 'undefined' || !groups[groupKey]) return [];
-    return groups[groupKey].children.filter(function(c){
-      return !c.userData.isLabel;
-    });
-  }
-
-  // 1. P-Substrate Base Wafer
-  var step1Meshes = getMeshes('substrate');
-
-  // 2. N-Well & P-Well Implants
-  var step2Meshes = getMeshes('well');
-
-  // 3. Gate Dielectric (SiO2 & High-k HfO2)
-  var step3Meshes = [].concat(getMeshes('oxide'), getMeshes('highk'));
-
-  // 4. Active Source / Drain Diffusions & SDE
-  var step4Meshes = getMeshes('active');
-
-  // 5. Polysilicon Gate Electrode
-  var step5Meshes = getMeshes('poly');
-
-  // 6. Tungsten Contact Vias
-  var step6Meshes = getMeshes('contact');
-
-  // 7. Metal-1 Interconnects & Power Rails
-  var step7Meshes = getMeshes('metal');
-
-  var stepData = [
-    {
-      index: 1,
-      title: 'P-Substrate Base Wafer',
-      meshes: step1Meshes,
-      camPos: new THREE.Vector3(24, 20, 26),
-      camTarget: new THREE.Vector3(-0.5, 1.5, 0),
-      narration: {
-        'en-IN': 'Every integrated circuit requires a physical starting canvas. We begin with a high-purity P-type silicon wafer that provides mechanical rigidity and body grounding, though raw silicon alone cannot yet isolate opposing devices or conduct controlled signals.',
-        'hi-IN': 'किसी भी एकीकृत सर्किट को एक ठोस भौतिक आधार की आवश्यकता होती है। हम एक उच्च-शुद्धता वाले पी-टाइप सिलिकॉन वेफर से शुरुआत करते हैं जो यांत्रिक आधार और बॉडी ग्राउंड प्रदान करता है, हालांकि कच्चा सिलिकॉन अकेले विपरीत ट्रांजिस्टरों को अलग नहीं रख सकता।',
-        'te-IN': 'ఏదైనా ఇంటిగ్రేటెడ్ సర్క్యూట్‌కు బలమైన భౌతిక పునాది అవసరం. మనం అధిక స్వచ్ఛత గల పి-రకం సిలికాన్ వేఫర్‌తో ప్రారంభిస్తాము, ఇది యాంత్రిక స్థిరత్వాన్ని మరియు బాడీ గ్రౌండ్‌ను అందిస్తుంది, కానీ స్వచ్ఛమైన సిలికాన్ మాత్రమే పరికరాలను వేరు చేయలేదు.'
-      }
-    },
-    {
-      index: 2,
-      title: 'Retrograde Twin Wells',
-      meshes: step2Meshes,
-      camPos: new THREE.Vector3(20, 17, 23),
-      camTarget: new THREE.Vector3(-0.5, 1.8, 0),
-      narration: {
-        'en-IN': 'To build both NMOS and PMOS on the same substrate without parasitic latch-up or short-circuits, we implant deep retrograde N-well and P-well basins, establishing isolated conductivity domains with tailored threshold voltages.',
-        'hi-IN': 'एक ही सबस्ट्रेट पर एन-मॉस और पी-मॉस दोनों को बिना किसी शॉर्ट-सर्किट या विनाशकारी लैच-अप के संचालित करने के लिए, हम गहरे रेट्रोग्रेड एन-वेल और पी-वेल बेसिन बनाकर अलग-अलग विद्युत क्षेत्र और थ्रेसहोल्ड वोल्टेज स्थापित करते हैं।',
-        'te-IN': 'షార్ట్ సర్క్యూట్‌లు మరియు లాచ్-అప్ సమస్యలు లేకుండా ఒకే సబ్‌స్ట్రేట్‌పై ఎన్-మాస్ మరియు పి-మాస్ నిర్మించడానికి, మనం వివిక్త విద్యుత్ మండలాలను మరియు థ్రెషోల్డ్ వోల్టేజ్‌లను ఏర్పాటు చేయడానికి లోతైన ఎన్-వెల్ మరియు పి-వెల్ బేసిన్‌లను అమర్చుతాము.'
-      }
-    },
-    {
-      index: 3,
-      title: 'Gate Dielectrics (SiO₂ & HfO₂)',
-      meshes: step3Meshes,
-      camPos: new THREE.Vector3(17, 14, 19),
-      camTarget: new THREE.Vector3(-0.5, 2.0, 0),
-      narration: {
-        'en-IN': 'If the gate touches the silicon directly, massive current would short-circuit, while quantum tunneling causes parasitic leakage. An ultra-thin interfacial oxide and high-k hafnium dielectric solve this, enabling intense capacitive control while stopping leakage.',
-        'hi-IN': 'यदि गेट सीधे सिलिकॉन को छुए तो शॉर्ट-सर्किट हो जाएगा और क्वांटम टनलिंग से लीकेज बढ़ेगी। इस समस्या को हल करने के लिए, हम एक अत्यंत पतली इंटरफेशियल ऑक्साइड और हाई-के हॉफ्नियम डाइइलेक्ट्रिक परत बिछाते हैं, जो मजबूत कैपेसिटिव नियंत्रण देती है।',
-        'te-IN': 'గేట్ నేరుగా సిలికాన్‌ను తాకితే షార్ట్ సర్క్యూట్ అవుతుంది మరియు క్వాంటమ్ లీకేజ్ ఏర్పడుతుంది. దీనిని పరిష్కరించడానికి, ఒక సన్నని ఆక్సైడ్ మరియు హై-కె డైఎలెక్ట్రిక్ పొరను నిక్షిప్తం చేస్తాము, ఇది లీకేజీని అరికడుతూ బలమైన కెపాసిటివ్ నియంత్రణను అందిస్తుంది.'
-      }
-    },
-    {
-      index: 4,
-      title: 'Active Source & Drain Diffusions',
-      meshes: step4Meshes,
-      camPos: new THREE.Vector3(15, 13, 17),
-      camTarget: new THREE.Vector3(-0.5, 2.0, 0),
-      narration: {
-        'en-IN': 'To switch digital signals, we need localized reservoirs packed with mobile charge carriers. Heavy ion implantation forms low-resistance N-plus and P-plus source and drain diffusions with shallow extensions, resisting short-channel effects.',
-        'hi-IN': 'डिजिटल सिग्नल स्विच करने के लिए हमें गतिशील चार्ज कैरियर्स के प्रचुर स्रोतों की आवश्यकता होती है। भारी आयन इम्प्लांटेशन द्वारा कम प्रतिरोध वाले एन-प्लस और पी-प्लस एक्टिव सोर्स और ड्रेन डिफ्यूजन बनाए जाते हैं, जो शॉर्ट-चैनल प्रभावों को भी रोकते हैं।',
-        'te-IN': 'సిగ్నల్‌లను స్విచ్ చేయడానికి మొబైల్ ఛార్జ్ క్యారియర్లు అవసరం. భారీ అయాన్ ఇంప్లాంటేషన్ ద్వారా తక్కువ నిరోధకత కలిగిన ఎన్-ప్లస్ మరియు పి-ప్లస్ సోర్స్ మరియు డ్రెయిన్ డిఫ్యూజన్లు ఏర్పడతాయి, ఇవి షార్ట్-ఛానల్ ప్రభావాలను కూడా నిరోధిస్తాయి.'
-      }
-    },
-    {
-      index: 5,
-      title: 'Polysilicon Gate Electrode',
-      meshes: step5Meshes,
-      camPos: new THREE.Vector3(13, 12, 16),
-      camTarget: new THREE.Vector3(-0.5, 2.1, 0),
-      narration: {
-        'en-IN': 'How do we switch one transistor on while turning the other off with a single input? A patterned polysilicon gate bridges both channels, simultaneously controlling NMOS and PMOS via self-aligned electrostatic field effect.',
-        'hi-IN': 'एक ही इनपुट से एक ट्रांजिस्टर को ऑन और दूसरे को ऑफ कैसे करें? एक पैटर्न्ड पॉलीसिलिकॉन गेट दोनों चैनलों को जोड़ता है और सेल्फ-अलाइन्ड इलेक्ट्रोस्टैटिक फील्ड इफेक्ट के माध्यम से दोनों को एक साथ नियंत्रित करता है।',
-        'te-IN': 'ఒకే ఇన్‌పుట్‌తో ఒక ట్రాన్సిస్టర్‌ను ఆన్ చేసి మరొకటి ఆఫ్ చేయడం ఎలా? ఒక తీర్చిదిద్దిన పాలీసిలికాన్ గేట్ రెండు ఛానళ్లను కలుపుతూ, సెల్ఫ్-అలైన్డ్ ఫీల్డ్ ఎఫెక్ట్ ద్వారా ఎన్-మాస్ మరియు పి-మాస్‌లను ఏకకాలంలో నియంత్రిస్తుంది.'
-      }
-    },
-    {
-      index: 6,
-      title: 'Tungsten Contact Plugs',
-      meshes: step6Meshes,
-      camPos: new THREE.Vector3(14, 12, 15),
-      camTarget: new THREE.Vector3(-0.5, 2.2, 0),
-      narration: {
-        'en-IN': 'External metal wiring cannot contact bare silicon directly without spiking and causing catastrophic damage. Refractory tungsten contact plugs vertically pierce the interlayer dielectric to form rugged, low-resistance ohmic connections.',
-        'hi-IN': 'ऊपरी मेटल वायरिंग सीधे सिलिकॉन को छूकर वेफर को पिघला या क्षतिग्रस्त कर सकती है। इसलिए दुर्दम्य टंगस्टन कॉन्टैक्ट प्लग डाइइलेक्ट्रिक को लंबवत भेदकर नीचे तक मजबूत, कम प्रतिरोध वाले ओमिक संपर्क बनाते हैं।',
-        'te-IN': 'బాహ్య మెటల్ వైరింగ్ నేరుగా సిలికాన్‌ను తాకితే నష్టం వాటిల్లుతుంది. కాబట్టి టంగ్‌స్టన్ కాంటాక్ట్ ప్లగ్‌లు ఇంటర్‌లేయర్ డైఎలెక్ట్రిక్‌ను నిలువుగా ఛేదిస్తూ గేట్లు మరియు డిఫ్యూజన్‌లకు బలమైన ఓమిక్ కనెక్షన్‌లను ఏర్పాటు చేస్తాయి.'
-      }
-    },
-    {
-      index: 7,
-      title: 'Metal-1 Rails & Interconnects',
-      meshes: step7Meshes,
-      camPos: new THREE.Vector3(16, 13, 18),
-      camTarget: new THREE.Vector3(-0.5, 1.9, 0),
-      narration: {
-        'en-IN': 'Finally, our discrete transistors must receive power and deliver inverted signals. Low-resistance metal-one tracks route VDD, ground, input, and the common output node, completing the operational CMOS inverter.',
-        'hi-IN': 'अंत में, अलग-अलग ट्रांजिस्टरों को पावर और सिग्नल रूटिंग की आवश्यकता होती है। कम प्रतिरोध वाले मेटल-वन ट्रैक्स वीडीडी, ग्राउंड, इनपुट और आउटपुट नोड को जोड़कर इस पूर्ण सीमॉस लॉजिक इन्वर्टर को तैयार करते हैं।',
-        'te-IN': 'చివరగా, వేర్వేరుగా ఉన్న ట్రాన్సిస్టర్లకు పవర్ మరియు సిగ్నల్ రూటింగ్ అవసరం. తక్కువ నిరోధకత కలిగిన మెటల్-వన్ ట్రాక్‌లు విడిడి, గ్రౌండ్, ఇన్‌పుట్ మరియు అవుట్‌పుట్ నోడ్‌లను అనుసంధానిస్తూ కార్యాచరణ సిమోస్ ఇన్వర్టర్‌ను పూర్తి చేస్తాయి.'
-      }
+// =====================================================================
+// 8-STEP ARCHITECTURE TREE & NARRATION DEFINITIONS
+// =====================================================================
+const TOUR_STEPS = [
+  {
+    step: 1,
+    layerKey: 'substrate',
+    layerName: 'SUBSTRATE',
+    parentLabel: 'SUBSTRATE',
+    childLabels: ['P-SUBSTRATE'],
+    primaryId: 'psub',
+    camPos: new THREE.Vector3(24, 20, 26),
+    camTarget: new THREE.Vector3(-0.5, 1.5, 0),
+    narration: {
+      'en-IN': "We start with a p-type silicon substrate as our base foundation, where the NMOS device region will reside.",
+      'hi-IN': "हम एक पी-टाइप सिलिकॉन सबस्ट्रेट से अपने आधार के रूप में शुरुआत करते हैं, जहां एन-मॉस डिवाइस क्षेत्र स्थित होगा।",
+      'te-IN': "మనం ఎన్-మాస్ పరికర ప్రాంతం ఉండే ఆధార పునాదిగా పి-రకం సిలికాన్ సబ్‌స్ట్రేట్‌తో ప్రారంభిస్తాము."
     }
-  ];
+  },
+  {
+    step: 2,
+    layerKey: 'well',
+    layerName: 'WELLS (N-WELL & P-WELL)',
+    parentLabel: 'WELL',
+    childLabels: ['N-WELL', 'P-WELL'],
+    primaryId: 'nwell',
+    camPos: new THREE.Vector3(20, 17, 23),
+    camTarget: new THREE.Vector3(-0.5, 1.8, 0),
+    narration: {
+      'en-IN': "Next, an N-well and P-well are diffused into the substrate to electrically isolate the PMOS and NMOS territories.",
+      'hi-IN': "इसके बाद, पी-मॉस और एन-मॉस क्षेत्रों को विद्युत रूप से अलग करने के लिए सबस्ट्रेट में एन-वेल और पी-वेल डिफ्यूज किए जाते हैं।",
+      'te-IN': "తరువాత, పి-మాస్ మరియు ఎన్-మాస్ ప్రాంతాలను విద్యుత్ పరంగా వేరు చేయడానికి సబ్‌స్ట్రేట్‌లోకి ఎన్-వెల్ మరియు పి-వెల్ విస్తరించబడతాయి."
+    }
+  },
+  {
+    step: 3,
+    layerKey: 'active',
+    layerName: 'ACTIVE / DIFFUSION',
+    parentLabel: 'TRANSISTORS',
+    childLabels: ['PMOS', 'NMOS', 'SOURCE', 'P-SDE (SRC)', 'GATE', 'P-SDE (DRN)', 'DRAIN', 'N-SDE (SRC)', 'N-SDE (DRN)'],
+    primaryId: 'pmos',
+    camPos: new THREE.Vector3(15, 13, 17),
+    camTarget: new THREE.Vector3(-0.5, 2.0, 0),
+    narration: {
+      'en-IN': "In the active regions, we implant PMOS and NMOS sources and drains, adding lightly doped SDE extensions at the channel edges to prevent short-channel effects.",
+      'hi-IN': "सक्रिय क्षेत्रों में, हम पी-मॉस और एन-मॉस सोर्स और ड्रेन प्रत्यारोपित करते हैं, शॉर्ट-चैनल प्रभावों को रोकने के लिए चैनल किनारों पर हल्के डोप किए गए एसडीई एक्सटेंशन जोड़ते हैं।",
+      'te-IN': "యాక్టివ్ ప్రాంతాలలో, మనం పి-మాస్ మరియు ఎన్-మాస్ సోర్స్‌లు మరియు డ్రెయిన్‌లను ఇంప్లాంట్ చేస్తాము, షార్ట్-ఛానల్ ప్రభావాలను నిరోధించడానికి ఛానల్ అంచుల వద్ద తేలికగా డోప్ చేయబడిన ఎస్‌డిఇ పొడిగింపులను జోడిస్తాము."
+    }
+  },
+  {
+    step: 4,
+    layerKey: 'oxide',
+    layerName: 'GATE OXIDE (SiO2)',
+    parentLabel: 'GATE OXIDE (SiO2)',
+    childLabels: ['PMOS OXIDE (SiO2)', 'NMOS OXIDE (SiO2)'],
+    primaryId: 'pmosOxide',
+    camPos: new THREE.Vector3(17, 14, 19),
+    camTarget: new THREE.Vector3(-0.5, 2.0, 0),
+    narration: {
+      'en-IN': "Ultra-thin Silicon Dioxide layers are grown over both channels to insulate the gates while coupling the electric field.",
+      'hi-IN': "इलेक्ट्रिक फील्ड को युग्मित करते हुए गेट्स को इन्सुलेट करने के लिए दोनों चैनलों पर अल्ट्रा-थिन सिलिकॉन डाइऑक्साइड परतें विकसित की जाती हैं।",
+      'te-IN': "ఎలక్ట్రిక్ ఫీల్డ్‌ను జతచేస్తూ గేట్లను ఇన్సులేట్ చేయడానికి రెండు ఛానెళ్లపై అల్ట్రా-సన్నని సిలికాన్ డయాక్సైడ్ పొరలు పెంచబడతాయి."
+    }
+  },
+  {
+    step: 5,
+    layerKey: 'highk',
+    layerName: 'HIGH-K DIELECTRIC (HfO2)',
+    parentLabel: 'HIGH-K DIELECTRIC (HfO2)',
+    childLabels: ['PMOS HIGH-K (HfO2)', 'NMOS HIGH-K (HfO2)'],
+    primaryId: 'pmosHighk',
+    camPos: new THREE.Vector3(17, 14, 19),
+    camTarget: new THREE.Vector3(-0.5, 2.0, 0),
+    narration: {
+      'en-IN': "Directly above the silicon oxide, we deposit Hafnium Oxide—a high-K dielectric that boosts gate capacitance and blocks quantum tunneling leakage.",
+      'hi-IN': "सिलिकॉन ऑक्साइड के ठीक ऊपर, हम हॉफ्नियम ऑक्साइड जमा करते हैं—एक हाई-के डाइइलेक्ट्रिक जो गेट कैपेसिटेंस को बढ़ाता है और क्वांटम टनलिंग लीकेज को रोकता है।",
+      'te-IN': "సిలికాన్ ఆక్సైడ్ పైభాగంలో, మనం హాఫ్నియం ఆక్సైడ్‌ను నిక్షిప్తం చేస్తాము—ఇది గేట్ కెపాసిటెన్స్‌ను పెంచే మరియు క్వాంటమ్ టన్నలింగ్ లీకేజీని అడ్డుకునే హై-కె డైఎలెక్ట్రిక్."
+    }
+  },
+  {
+    step: 6,
+    layerKey: 'poly',
+    layerName: 'POLYSILICON',
+    parentLabel: 'POLYSILICON',
+    childLabels: ['COMMON GATE'],
+    primaryId: 'poly',
+    camPos: new THREE.Vector3(13, 12, 16),
+    camTarget: new THREE.Vector3(-0.5, 2.1, 0),
+    narration: {
+      'en-IN': "A single continuous polysilicon strip drops across both transistors to form their shared common gate electrode.",
+      'hi-IN': "दोनों ट्रांजिस्टर पर एक एकल निरंतर पॉलीसिलिकॉन पट्टी गिरती है ताकि उनका साझा सामान्य गेट इलेक्ट्रोड बन सके।",
+      'te-IN': "రెండు ట్రాన్సిస్టర్ల మీదుగా ఒకే నిరంతర పాలీసిలికాన్ స్ట్రిప్ పడి వాటి ఉమ్మడి గేట్ ఎలక్ట్రోడ్‌ను ఏర్పరుస్తుంది."
+    }
+  },
+  {
+    step: 7,
+    layerKey: 'contact',
+    layerName: 'CONTACT (TUNGSTEN)',
+    parentLabel: 'CONTACTS (TUNGSTEN)',
+    childLabels: ['PMOS SRC CT', 'PMOS DRN CT', 'NMOS SRC CT', 'NMOS DRN CT', 'POLY / IN CT'],
+    primaryId: 'contact',
+    camPos: new THREE.Vector3(14, 12, 15),
+    camTarget: new THREE.Vector3(-0.5, 2.2, 0),
+    narration: {
+      'en-IN': "Next, five vertical tungsten contact vias drop onto the PMOS and NMOS sources and drains, as well as the shared polysilicon gate.",
+      'hi-IN': "इसके बाद, पांच ऊर्ध्वाधर टंगस्टन संपर्क वियाज पी-मॉस और एन-मॉस सोर्स और ड्रेन के साथ-साथ साझा पॉलीसिलिकॉन गेट पर गिरते हैं।",
+      'te-IN': "తరువాత, ఐదు నిలువు టంగ్‌స్టన్ కాంటాక్ట్ వయాస్ పి-మాస్ మరియు ఎన్-మాస్ సోర్స్‌లు మరియు డ్రెయిన్‌లపై, అలాగే షేర్డ్ పాలీసిలికాన్ గేట్‌పై పడతాయి."
+    }
+  },
+  {
+    step: 8,
+    layerKey: 'metal',
+    layerName: 'METAL-1 (incl. VDD/GND/IN/OUT)',
+    parentLabel: 'METAL-1',
+    childLabels: ['VDD', 'GND', 'IN', 'OUT'],
+    primaryId: 'metal',
+    camPos: new THREE.Vector3(16, 13, 18),
+    camTarget: new THREE.Vector3(-0.5, 1.9, 0),
+    narration: {
+      'en-IN': "Finally, Metal-1 interconnects drop in: VDD supplies the PMOS source, Ground ties the NMOS source, IN drives the gate, and OUT connects both drains.",
+      'hi-IN': "अंत में, मेटल-1 इंटरकनेक्ट्स आते हैं: वीडीडी पी-मॉस सोर्स को आपूर्ति करता है, ग्राउंड एन-मॉस सोर्स को जोड़ता है, इन गेट को चलाता है, और आउट दोनों ड्रेन को जोड़ता है।",
+      'te-IN': "చివరగా, మెటల్-1 ఇంటర్‌కనెక్ట్‌లు వస్తాయి: విడిడి పి-మాస్ సోర్స్‌ను సరఫరా చేస్తుంది, గ్రౌండ్ ఎన్-మాస్ సోర్స్‌ను కలుపుతుంది, ఇన్ గేట్‌ను నడుపుతుంది మరియు అవుట్ రెండు డ్రెయిన్‌లను కలుపుతుంది."
+    }
+  }
+];
 
-  // Record initial origin Y and opacity for each mesh
-  stepData.forEach(function(step){
-    step.meshes.forEach(function(m){
-      if (typeof m.userData.origY === 'undefined'){
-        m.userData.origY = m.position.y;
-      }
-      if (m.material){
-        if (typeof m.userData.origOpacity === 'undefined'){
-          m.userData.origOpacity = (typeof m.material.opacity === 'number') ? m.material.opacity : 1.0;
-          m.userData.origTransparent = !!m.material.transparent;
+// Cache resting Y and material properties once
+function cacheSceneRestCoordinates(){
+  if (typeof LAYER_ORDER === 'undefined' || typeof groups === 'undefined') return;
+  LAYER_ORDER.forEach(k => {
+    const grp = groups[k];
+    if (grp){
+      grp.children.forEach(item => {
+        if (typeof item.userData.restY === 'undefined'){
+          item.userData.restY = item.position.y;
         }
-      }
-    });
-    step.narrated = false;
-    buildSteps.push(step);
-  });
-}
-
-function getAllLabels(){
-  var labels = [];
-  if (typeof LAYER_ORDER === 'undefined' || typeof groups === 'undefined') return labels;
-  LAYER_ORDER.forEach(function(k){
-    if (groups[k]){
-      groups[k].children.forEach(function(c){
-        if (c.userData.isLabel) labels.push(c);
+        if (item.material && typeof item.userData.origOpacity === 'undefined'){
+          item.userData.origOpacity = (typeof item.material.opacity === 'number') ? item.material.opacity : 1.0;
+          item.userData.origTransparent = !!item.material.transparent;
+        }
       });
     }
   });
-  return labels;
 }
 
-var btnBuildAnim = document.getElementById('btn-build-anim');
-
-// =====================================================================
-// STEP EXECUTION & DYNAMIC AUDIO SYNCHRONIZATION
-// =====================================================================
-
-function executeStep(stepIndex){
-  if (!isBuildAnimating) return;
-
-  // If all 7 layers have been fabricated, finalize assembly sequence
-  if (stepIndex >= buildSteps.length){
-    finishBuildAnimation();
-    return;
+function getStepNarrationText(step){
+  const lang = (window.getCurrentAssistantLang && window.getCurrentAssistantLang()) || 'en-IN';
+  if (typeof step.narration === 'object'){
+    return step.narration[lang] || step.narration['en-IN'] || step.narration.text;
   }
+  return step.narration;
+}
 
-  currentStepIdx = stepIndex;
-  var step = buildSteps[stepIndex];
+// =====================================================================
+// UI BUTTON & CONTROLS
+// =====================================================================
+const btnBuildAnim = document.getElementById('btn-build-anim');
 
-  stepDropElapsed = 0;
-  isStepDropping = true;
-  stepAudioEnded = false;
-  stepPauseElapsed = 0;
+function setBuildBtnUI(state){
+  if (!btnBuildAnim) return;
+  if (state === 'PAUSE'){
+    btnBuildAnim.innerHTML = '<span class="play-icon">⏸</span> <span class="play-label">PAUSE</span>';
+    btnBuildAnim.classList.add('active');
+    btnBuildAnim.title = 'Pause 3D fabrication sequence';
+  } else if (state === 'RESUME'){
+    btnBuildAnim.innerHTML = '<span class="play-icon">▶</span> <span class="play-label">RESUME</span>';
+    btnBuildAnim.classList.add('active');
+    btnBuildAnim.title = 'Resume 3D fabrication sequence';
+  } else if (state === 'REPLAY'){
+    btnBuildAnim.innerHTML = '<span class="play-icon">↺</span> <span class="play-label">REPLAY</span>';
+    btnBuildAnim.classList.remove('active');
+    btnBuildAnim.title = 'Replay 3D fabrication sequence';
+  } else {
+    btnBuildAnim.innerHTML = '<span class="play-icon">▶</span> <span class="play-label">PLAY</span><span class="play-extra">&nbsp;TOUR</span>';
+    btnBuildAnim.classList.remove('active');
+    btnBuildAnim.title = 'Watch step-by-step 3D fabrication sequence with AI Voice Tutor';
+  }
+}
 
-  // Reveal current layer: make visible at elevated drop height with zero opacity
-  step.meshes.forEach(function(m){
-    m.visible = true;
-    m.position.y = m.userData.origY + DROP_HEIGHT;
-    if (m.material){
-      m.material.transparent = true;
-      m.material.opacity = 0.0;
-    }
-  });
+function pauseTour(){
+  if (!isTourRunning || isTourPaused) return;
+  isTourPaused = true;
+  isBuildPaused = true;
+  window.isTourPaused = true;
+  window.isBuildPaused = true;
+  if (tourAudioInstance && !tourAudioInstance.paused){
+    try { tourAudioInstance.pause(); } catch(e){}
+  }
+  setBuildBtnUI('RESUME');
+}
 
-  // Smooth camera choreography to this step's perspective
-  var startPos = activeCamera.position.clone();
-  var startTarget = controls.target.clone();
-  currentCamLerp = {
-    startPos: startPos,
-    endPos: step.camPos.clone(),
-    startTarget: startTarget,
-    endTarget: step.camTarget.clone(),
-    duration: 1.8,
+function resumeTour(){
+  if (!isTourRunning || !isTourPaused) return;
+  isTourPaused = false;
+  isBuildPaused = false;
+  window.isTourPaused = false;
+  window.isBuildPaused = false;
+  if (tourAudioInstance && tourAudioInstance.paused){
+    try { tourAudioInstance.play(); } catch(e){}
+  }
+  setBuildBtnUI('PAUSE');
+}
+
+// Rule 1: Strictly hide sidebar toggle drawer arrows (< and >) during tour
+function hideSidebarToggleArrows(){
+  document.body.classList.add('tour-running');
+  const leftToggle = document.getElementById('left-toggle');
+  const rightToggle = document.getElementById('right-toggle');
+  if (leftToggle){
+    leftToggle.style.setProperty('display', 'none', 'important');
+  }
+  if (rightToggle){
+    rightToggle.style.setProperty('display', 'none', 'important');
+  }
+}
+
+function restoreSidebarToggleArrows(){
+  document.body.classList.remove('tour-running');
+  const leftToggle = document.getElementById('left-toggle');
+  const rightToggle = document.getElementById('right-toggle');
+  if (leftToggle){
+    leftToggle.style.removeProperty('display');
+  }
+  if (rightToggle){
+    rightToggle.style.removeProperty('display');
+  }
+}
+
+// Camera transition helper
+function transitionCamera(targetPos, targetLookAt, durationSec){
+  if (typeof activeCamera === 'undefined' || typeof controls === 'undefined') return;
+  camLerp = {
+    startPos: activeCamera.position.clone(),
+    endPos: targetPos.clone(),
+    startTarget: controls.target.clone(),
+    endTarget: targetLookAt.clone(),
+    duration: durationSec || 1.2,
     elapsed: 0
   };
-
-  // Trigger audio narration with onEnded event synchronization
-  if (typeof window.playVoiceNarration === 'function'){
-    window.playVoiceNarration(
-      step.index,
-      step.title,
-      step.narration,
-      6.0,
-      function onAudioEnded(){
-        // Dynamically synchronized: wait for current audio to finish before advancing
-        if (!isBuildAnimating || currentStepIdx !== stepIndex) return;
-        stepAudioEnded = true;
-        stepPauseElapsed = 0;
-      }
-    );
-  } else {
-    // Fallback if voice tutor is absent
-    setTimeout(function(){
-      if (!isBuildAnimating || currentStepIdx !== stepIndex) return;
-      stepAudioEnded = true;
-      stepPauseElapsed = 0;
-    }, 6000);
-  }
 }
 
 // =====================================================================
-// LIFECYCLE CONTROLS
+// SARVAM AI AUDIO ENGINE & PRE-FETCHING
 // =====================================================================
 
-function startBuildAnimation(){
-  initBuildSteps();
-
-  // Reset explode & section scrubs so parts assemble directly in wafer space
-  if (typeof applyExplode === 'function'){
-    applyExplode(0, 0, 0);
-  }
-  if (typeof resetScrub === 'function'){
-    resetScrub();
+async function fetchSarvamAudioBlob(text){
+  if (stepAudioCache.has(text)){
+    return stepAudioCache.get(text);
   }
 
-  isBuildAnimating = true;
-  isBuildPaused = false;
-  totalAnimTime = 0;
-  currentCamLerp = null;
-
-  if (btnBuildAnim){
-    btnBuildAnim.textContent = 'PAUSE';
-    btnBuildAnim.classList.add('active');
+  const apiKey = (localStorage.getItem('sarvam_api_key') || '').trim();
+  if (!apiKey){
+    throw new Error('Sarvam API key missing');
   }
 
-  // Hide 3D labels and flow markers during assembly
-  getAllLabels().forEach(function(l){ l.visible = false; });
+  const lang = (window.getCurrentAssistantLang && window.getCurrentAssistantLang()) || 'en-IN';
+  let speaker = 'aparna_en_edtech';
+  if (lang === 'hi-IN') speaker = 'aparna_hi_customer';
+  else if (lang === 'te-IN') speaker = 'kavitha_te_narration';
+
+  const payload = {
+    inputs: [text],
+    target_language_code: lang,
+    speaker: speaker,
+    model: 'bulbul:v4-flash'
+  };
+
+  const res = await fetch('https://api.sarvam.ai/text-to-speech', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-subscription-key': apiKey
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok){
+    const errText = await res.text();
+    throw new Error(`Sarvam TTS error ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  if (!data || !data.audios || !data.audios[0]){
+    throw new Error('No audio data returned by Sarvam API');
+  }
+
+  // Base64 -> Blob (audio/wav)
+  const binaryString = window.atob(data.audios[0]);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++){
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const blob = new Blob([bytes.buffer], { type: 'audio/wav' });
+  stepAudioCache.set(text, blob);
+  return blob;
+}
+
+function prefetchStepAudio(narration){
+  const text = (typeof narration === 'object') ? (narration[window.getCurrentAssistantLang ? window.getCurrentAssistantLang() : 'en-IN'] || narration['en-IN']) : narration;
+  if (!text || stepAudioCache.has(text)) return;
+  fetchSarvamAudioBlob(text).catch(err => {
+    console.warn('[Tour] Pre-fetch error (will fetch on landing):', err);
+  });
+}
+
+function speakStepWithSarvam(narration, runId){
+  return new Promise(async (resolve) => {
+    if (runId !== currentTourRunId){
+      resolve();
+      return;
+    }
+
+    const text = (typeof narration === 'object') ? (narration[window.getCurrentAssistantLang ? window.getCurrentAssistantLang() : 'en-IN'] || narration['en-IN']) : narration;
+
+    // Clear previous tour audio instance if any
+    if (tourAudioInstance){
+      try {
+        tourAudioInstance.pause();
+        tourAudioInstance.currentTime = 0;
+        tourAudioInstance.src = '';
+      } catch(e){}
+      tourAudioInstance = null;
+    }
+
+    let blob = null;
+    try {
+      blob = await fetchSarvamAudioBlob(text);
+    } catch(err){
+      console.warn('[Tour] TTS fetch failed, using fallback pause:', err);
+      // Fallback pause if no key or network error
+      const start = performance.now();
+      function checkFallback(now){
+        if (runId !== currentTourRunId || now - start >= 5000){
+          resolve();
+        } else {
+          requestAnimationFrame(checkFallback);
+        }
+      }
+      requestAnimationFrame(checkFallback);
+      return;
+    }
+
+    if (runId !== currentTourRunId || !blob){
+      resolve();
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    const audio = new Audio(objectUrl);
+    tourAudioInstance = audio;
+
+    if (typeof window.notifyTourAudioStart === 'function'){
+      window.notifyTourAudioStart(text);
+    }
+
+    let finished = false;
+    function cleanup(){
+      if (finished) return;
+      finished = true;
+      if (tourAudioInstance === audio){
+        tourAudioInstance = null;
+      }
+      try { URL.revokeObjectURL(objectUrl); } catch(e){}
+      if (typeof window.notifyTourAudioEnd === 'function'){
+        window.notifyTourAudioEnd();
+      }
+      resolve();
+    }
+
+    audio.onended = cleanup;
+    audio.onerror = cleanup;
+
+    while (isTourPaused && runId === currentTourRunId){
+      await new Promise(r => setTimeout(r, 50));
+    }
+
+    if (runId !== currentTourRunId){
+      cleanup();
+      return;
+    }
+
+    audio.play().catch(err => {
+      console.warn('[Tour] Audio play failed:', err);
+      cleanup();
+    });
+  });
+}
+
+// =====================================================================
+// 3D SCENE & LAYER ANIMATION
+// =====================================================================
+
+function hardResetSceneBlank(){
+  cacheSceneRestCoordinates();
+
+  // Rule 1: IN = OFF, no flow markers or directional vector arrows
+  currentIn = 'off';
+  const inSeg = document.getElementById('in-seg');
+  if (inSeg){
+    inSeg.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', b.dataset.in === 'off');
+    });
+  }
+  if (typeof applyLogicState === 'function') applyLogicState();
+
   if (typeof markerGroup !== 'undefined' && markerGroup){
     markerGroup.visible = false;
   }
 
-  // Pre-position all assembly meshes at elevated drop height and hide them
-  buildSteps.forEach(function(step){
-    step.narrated = false;
-    step.meshes.forEach(function(m){
-      m.visible = false;
-      m.position.y = m.userData.origY + DROP_HEIGHT;
-      if (m.material){
-        m.material.transparent = true;
-        m.material.opacity = 0.0;
-      }
-    });
+  const flowCap = document.getElementById('flow-caption');
+  if (flowCap){
+    flowCap.classList.remove('visible');
+    flowCap.textContent = '';
+  }
+
+  // Reset explode & scrub to 0
+  if (typeof applyExplode === 'function') applyExplode(0, 0, 0);
+  if (typeof resetScrub === 'function') resetScrub();
+
+  // Hide EVERY 3D mesh group AND every 3D floating label
+  LAYER_ORDER.forEach(k => {
+    const grp = groups[k];
+    if (grp){
+      grp.visible = false;
+      grp.children.forEach(item => {
+        item.visible = false;
+        item.position.y = item.userData.restY + DROP_OFFSET;
+        if (item.material){
+          item.material.transparent = true;
+          item.material.opacity = 0.0;
+        }
+      });
+    }
   });
 
-  // Set camera to initial crane position
-  activeCamera.position.copy(buildSteps[0].camPos);
-  controls.target.copy(buildSteps[0].camTarget);
-  controls.update();
-
-  // Prefetch upcoming animation steps in background using Sarvam TTS API
-  if (typeof window.prefetchNarrationSteps === 'function'){
-    window.prefetchNarrationSteps(buildSteps);
-  }
-
-  // Begin Step 1 immediately
-  executeStep(0);
-}
-
-function pauseBuildAnimation(){
-  if (!isBuildAnimating) return;
-  isBuildPaused = true;
-  if (typeof window.pauseVoiceNarration === 'function'){
-    window.pauseVoiceNarration();
-  }
-  if (btnBuildAnim){
-    btnBuildAnim.textContent = 'RESUME';
-  }
-}
-
-function resumeBuildAnimation(){
-  if (!isBuildAnimating) return;
-  isBuildPaused = false;
-  if (typeof window.resumeVoiceNarration === 'function'){
-    window.resumeVoiceNarration();
-  }
-  if (btnBuildAnim){
-    btnBuildAnim.textContent = 'PAUSE';
-  }
-}
-
-function finishBuildAnimation(){
-  isBuildAnimating = false;
-  isBuildPaused = false;
-  currentStepIdx = buildSteps.length;
-  currentCamLerp = null;
-
-  if (btnBuildAnim){
-    btnBuildAnim.textContent = 'REPLAY';
-    btnBuildAnim.classList.remove('active');
-  }
-
-  // Restore all meshes to exact original Y positions and make them visible
-  buildSteps.forEach(function(step){
-    step.meshes.forEach(function(m){
-      m.visible = true;
-      m.position.y = m.userData.origY;
-      if (m.material && typeof m.userData.origOpacity !== 'undefined'){
-        m.material.opacity = m.userData.origOpacity;
-        m.material.transparent = m.userData.origTransparent;
-      }
-    });
+  // Uncheck all 8 checkboxes in the LAYER VISIBILITY panel
+  document.querySelectorAll('#layers-body input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
   });
 
-  // Restore labels and flow markers
-  getAllLabels().forEach(function(l){ l.visible = true; });
-  if (typeof markerGroup !== 'undefined' && markerGroup){
-    markerGroup.visible = true;
-    rebuildFlowCurves();
-    refreshConnections();
-  }
+  // Clear tree selections
+  document.querySelectorAll('#tree .node.selected').forEach(n => n.classList.remove('selected'));
 
-  // Final heroic isometric camera view
-  var finalPos = new THREE.Vector3(16, 12, 18);
-  var finalTarget = new THREE.Vector3(-0.5, 1.8, 0);
-  activeCamera.position.copy(finalPos);
-  controls.target.copy(finalTarget);
-  controls.update();
-
-  // Closing voice narration
-  if (typeof window.playVoiceNarration === 'function'){
-    window.playVoiceNarration(8, 'CMOS Inverter Complete', {
-      'en-IN': 'Fabrication is complete. The NMOS and PMOS operate in complementary harmony, producing clean rail-to-rail logic inversion with zero static power dissipation.',
-      'hi-IN': 'निर्माण पूरा हुआ! एन-मॉस और पी-मॉस ट्रांजिस्टर परस्पर सामंजस्य में काम करते हैं और बिना किसी स्टैटिक पावर खर्च के सटीक लॉजिक इन्वर्शन प्रदान करते हैं।',
-      'te-IN': 'తయారీ పూర్తయింది! ఎన్-మాస్ మరియు పి-మాస్ ట్రాన్సిస్టర్లు పరస్పర సమన్వయంతో పనిచేస్తూ, సున్నా స్టాటిక్ పవర్ నష్టంతో ఖచ్చితమైన లాజిక్ ఇన్వర్షన్‌ను అందిస్తాయి.'
-    }, 5.0);
+  // Reset inspector
+  const inspector = document.getElementById('inspector');
+  if (inspector){
+    inspector.innerHTML = '<div class="empty">Starting 3D fabrication tour...</div>';
   }
+  const crumb = document.getElementById('crumb-sel');
+  if (crumb) crumb.textContent = '';
 }
 
-function stopBuildAnimation(){
-  isBuildAnimating = false;
-  isBuildPaused = false;
-  currentStepIdx = -1;
-  totalAnimTime = 0;
-  currentCamLerp = null;
+function updateUIForTourStep(step){
+  // Check ONLY this step's LAYER VISIBILITY checkbox
+  const cb = document.querySelector(`#layers-body input[data-layer="${step.layerKey}"]`);
+  if (cb) cb.checked = true;
 
-  if (typeof window.stopVoiceNarration === 'function'){
-    window.stopVoiceNarration();
-  }
-
-  if (btnBuildAnim){
-    btnBuildAnim.textContent = 'PLAY';
-    btnBuildAnim.classList.remove('active');
-  }
-
-  initBuildSteps();
-  buildSteps.forEach(function(step){
-    step.narrated = false;
-    step.meshes.forEach(function(m){
-      m.visible = true;
-      m.position.y = m.userData.origY;
-      if (m.material && typeof m.userData.origOpacity !== 'undefined'){
-        m.material.opacity = m.userData.origOpacity;
-        m.material.transparent = m.userData.origTransparent;
-      }
-    });
+  // Highlight active node in ARCHITECTURE TREE
+  document.querySelectorAll('#tree .node.selected').forEach(n => n.classList.remove('selected'));
+  let firstNode = null;
+  document.querySelectorAll('#tree .node').forEach(node => {
+    const lbl = node.dataset.label;
+    if (lbl === step.parentLabel || (step.childLabels && step.childLabels.includes(lbl))){
+      node.classList.add('selected');
+      if (!firstNode) firstNode = node;
+    }
   });
-
-  getAllLabels().forEach(function(l){ l.visible = true; });
-  if (typeof markerGroup !== 'undefined' && markerGroup){
-    markerGroup.visible = true;
-    rebuildFlowCurves();
-    refreshConnections();
-  }
-}
-
-// =====================================================================
-// RENDER LOOP UPDATE (CALLED PER FRAME)
-// =====================================================================
-
-function updateBuildAnimation(dt){
-  if (!isBuildAnimating || isBuildPaused) return;
-
-  totalAnimTime += dt;
-
-  // Safety ceiling: if total duration exceeds maximum window, finalize sequence
-  if (totalAnimTime >= MAX_TOTAL_DURATION){
-    finishBuildAnimation();
-    return;
+  if (firstNode && typeof firstNode.scrollIntoView === 'function'){
+    try { firstNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e){}
   }
 
-  // 1. Smooth cinematic camera lerp
-  if (currentCamLerp){
-    currentCamLerp.elapsed += dt;
-    var camP = Math.min(1.0, currentCamLerp.elapsed / currentCamLerp.duration);
-    var camEased = camP * camP * (3.0 - 2.0 * camP); // smoothstep
-    activeCamera.position.lerpVectors(currentCamLerp.startPos, currentCamLerp.endPos, camEased);
-    controls.target.lerpVectors(currentCamLerp.startTarget, currentCamLerp.endTarget, camEased);
-    controls.update();
-    if (camP >= 1.0){
-      currentCamLerp = null;
+  // Update PROPERTY INSPECTOR
+  if (typeof idToInfo === 'function' && typeof showInspector === 'function'){
+    const info = idToInfo(step.primaryId);
+    if (info){
+      showInspector(step.primaryId, info);
+      const crumb = document.getElementById('crumb-sel');
+      if (crumb) crumb.textContent = '— ' + (info.title || step.layerName);
     }
   }
 
-  // 2. Animate physical drop & opacity reveal of current layer
-  if (currentStepIdx >= 0 && currentStepIdx < buildSteps.length){
-    var curStep = buildSteps[currentStepIdx];
+  // Smooth camera orientation
+  transitionCamera(step.camPos, step.camTarget, 1.2);
+}
 
-    if (isStepDropping){
-      stepDropElapsed += dt;
-      var dropP = Math.min(1.0, stepDropElapsed / DROP_DURATION);
-      var eased = easeDrop(dropP);
+function animateLayerDropIn(layerKey, durationMs, runId){
+  return new Promise((resolve) => {
+    if (runId !== currentTourRunId){
+      resolve();
+      return;
+    }
+    const group = groups[layerKey];
+    if (!group){
+      resolve();
+      return;
+    }
 
-      curStep.meshes.forEach(function(m){
-        m.visible = true;
-        m.position.y = m.userData.origY + DROP_HEIGHT * (1.0 - eased);
-        if (m.material && typeof m.userData.origOpacity !== 'undefined'){
-          var fadeP = Math.min(1.0, dropP / 0.65); // smoothly fade to full opacity
-          m.material.opacity = m.userData.origOpacity * fadeP;
+    // Reveal group and all its children (both meshes and 3D labels)
+    group.visible = true;
+    const items = group.children;
+
+    items.forEach(item => {
+      item.visible = true;
+      item.position.y = item.userData.restY + DROP_OFFSET;
+      if (item.material){
+        item.material.transparent = true;
+        item.material.opacity = 0.0;
+      }
+    });
+
+    let lastTime = performance.now();
+    let elapsed = 0;
+
+    function frame(now){
+      if (runId !== currentTourRunId){
+        resolve();
+        return;
+      }
+
+      const dt = now - lastTime;
+      lastTime = now;
+
+      if (!isTourPaused){
+        elapsed += dt;
+      }
+
+      const p = Math.min(1.0, elapsed / durationMs);
+      const eased = 1.0 - Math.pow(1.0 - p, 3.0); // cubic-out
+
+      items.forEach(item => {
+        item.position.y = item.userData.restY + DROP_OFFSET * (1.0 - eased);
+        if (item.material && typeof item.userData.origOpacity !== 'undefined'){
+          item.material.opacity = item.userData.origOpacity * p;
         }
       });
 
-      if (dropP >= 1.0){
-        isStepDropping = false;
-        // Settle cleanly in place
-        curStep.meshes.forEach(function(m){
-          m.visible = true;
-          m.position.y = m.userData.origY;
-          if (m.material && typeof m.userData.origOpacity !== 'undefined'){
-            m.material.opacity = m.userData.origOpacity;
-            m.material.transparent = m.userData.origTransparent;
+      if (p < 1.0){
+        requestAnimationFrame(frame);
+      } else {
+        // Snap cleanly to resting position
+        items.forEach(item => {
+          item.position.y = item.userData.restY;
+          if (item.material && typeof item.userData.origOpacity !== 'undefined'){
+            item.material.opacity = item.userData.origOpacity;
+            item.material.transparent = item.userData.origTransparent;
           }
         });
+        resolve();
       }
     }
 
-    // 3. Check for dynamic audio completion & natural storytelling pause
-    if (stepAudioEnded){
-      stepPauseElapsed += dt;
-      if (stepPauseElapsed >= INTER_STEP_PAUSE){
-        stepAudioEnded = false;
-        executeStep(currentStepIdx + 1);
-      }
+    requestAnimationFrame(frame);
+  });
+}
+
+// =====================================================================
+// MAIN TOUR EXECUTION LOOP
+// =====================================================================
+
+async function startTour(){
+  // Check for Sarvam API key
+  if (typeof window.hasSarvamApiKey === 'function' && !window.hasSarvamApiKey()){
+    if (typeof window.openSarvamApiKeyModal === 'function'){
+      window.openSarvamApiKeyModal(() => {
+        startTour();
+      });
+      return;
+    }
+  }
+
+  // 1. Cancel any running tour
+  const runId = ++currentTourRunId;
+  isTourRunning = true;
+  isTourPaused = false;
+  isBuildAnimating = true;
+  isBuildPaused = false;
+  window.isTourRunning = true;
+  window.isTourPaused = false;
+  window.isBuildAnimating = true;
+  window.isBuildPaused = false;
+
+  if (tourAudioInstance){
+    try {
+      tourAudioInstance.pause();
+      tourAudioInstance.currentTime = 0;
+      tourAudioInstance.src = '';
+    } catch(e){}
+    tourAudioInstance = null;
+  }
+
+  setBuildBtnUI('PAUSE');
+
+  // Rule 1: Strictly hide sidebar toggle drawer arrows (< and >) during tour
+  hideSidebarToggleArrows();
+
+  // 2. Hard Reset the 3D scene to 100% blank
+  hardResetSceneBlank();
+
+  // Position camera at initial vantage point
+  activeCamera.position.copy(TOUR_STEPS[0].camPos);
+  controls.target.copy(TOUR_STEPS[0].camTarget);
+  controls.update();
+
+  // 3. Strict Sequential for...of Execution Loop
+  for (let i = 0; i < TOUR_STEPS.length; i++){
+    if (runId !== currentTourRunId) return; // Aborted by Reset or Replay
+    const step = TOUR_STEPS[i];
+
+    // A. Pre-fetch next step's Sarvam audio in background
+    if (i + 1 < TOUR_STEPS.length){
+      prefetchStepAudio(TOUR_STEPS[i + 1].narration);
+    }
+
+    // B. Update UI for ONLY this step:
+    // Check ONLY this step's LAYER VISIBILITY checkbox, highlight this node in ARCHITECTURE TREE, and update PROPERTY INSPECTOR
+    updateUIForTourStep(step);
+
+    // C. Reveal ONLY this step's 3D meshes + its 3D labels, and animate them dropping down from above (restY + 2.5 -> restY over 700ms)
+    const dropPromise = animateLayerDropIn(step.layerKey, DROP_DURATION_MS, runId);
+
+    // D. Play this step's Sarvam AI voiceover and wait until `audio.onended` fires
+    const audioPromise = speakStepWithSarvam(step.narration, runId);
+
+    // E. STRICT AWAIT: Do NOT move to step i+1 until BOTH the 3D drop AND the entire voiceover finish!
+    await Promise.all([dropPromise, audioPromise]);
+
+    if (runId !== currentTourRunId) return;
+
+    // Wait if paused between steps
+    while (isTourPaused && runId === currentTourRunId){
+      await new Promise(r => setTimeout(r, 50));
+    }
+
+    if (runId !== currentTourRunId) return;
+    await new Promise(r => setTimeout(r, STEP_PAUSE_MS)); // 300ms natural pause between steps
+  }
+
+  if (runId === currentTourRunId){
+    onTourFinished(runId);
+  }
+}
+
+function onTourFinished(runId){
+  if (runId !== currentTourRunId) return;
+  isTourRunning = false;
+  isTourPaused = false;
+  isBuildAnimating = false;
+  isBuildPaused = false;
+  window.isTourRunning = false;
+  window.isTourPaused = false;
+  window.isBuildAnimating = false;
+  window.isBuildPaused = false;
+  setBuildBtnUI('REPLAY');
+
+  // Restore sidebar toggle buttons
+  restoreSidebarToggleArrows();
+
+  // Re-check all checkboxes
+  document.querySelectorAll('#layers-body input[type="checkbox"]').forEach(cb => {
+    cb.checked = true;
+  });
+
+  // Ensure all groups and meshes are visible at restY
+  LAYER_ORDER.forEach(k => {
+    const grp = groups[k];
+    if (grp){
+      grp.visible = true;
+      grp.children.forEach(item => {
+        if (typeof item.userData.restY !== 'undefined') item.position.y = item.userData.restY;
+        item.visible = true;
+        if (item.material && typeof item.userData.origOpacity !== 'undefined'){
+          item.material.opacity = item.userData.origOpacity;
+          item.material.transparent = item.userData.origTransparent;
+        }
+      });
+    }
+  });
+
+  // Restore flow markers
+  if (typeof markerGroup !== 'undefined' && markerGroup){
+    markerGroup.visible = true;
+    if (typeof rebuildFlowCurves === 'function') rebuildFlowCurves();
+    if (typeof refreshConnections === 'function') refreshConnections();
+  }
+
+  // Hero camera view
+  transitionCamera(new THREE.Vector3(16, 12, 18), new THREE.Vector3(-0.5, 1.8, 0), 1.8);
+}
+
+function stopTour(){
+  currentTourRunId++; // Cancels running loop immediately
+  isTourRunning = false;
+  isTourPaused = false;
+  isBuildAnimating = false;
+  isBuildPaused = false;
+  window.isTourRunning = false;
+  window.isTourPaused = false;
+  window.isBuildAnimating = false;
+  window.isBuildPaused = false;
+
+  if (tourAudioInstance){
+    try {
+      tourAudioInstance.pause();
+      tourAudioInstance.currentTime = 0;
+      tourAudioInstance.src = '';
+    } catch(e){}
+    tourAudioInstance = null;
+  }
+
+  camLerp = null;
+  restoreSidebarToggleArrows();
+  setBuildBtnUI('PLAY');
+
+  // Re-check all checkboxes
+  document.querySelectorAll('#layers-body input[type="checkbox"]').forEach(cb => {
+    cb.checked = true;
+  });
+
+  // Restore all 3D meshes and labels to resting coordinates and opacities
+  cacheSceneRestCoordinates();
+  LAYER_ORDER.forEach(k => {
+    const grp = groups[k];
+    if (grp){
+      grp.visible = true;
+      grp.children.forEach(item => {
+        if (typeof item.userData.restY !== 'undefined'){
+          item.position.y = item.userData.restY;
+        }
+        item.visible = true;
+        if (item.material && typeof item.userData.origOpacity !== 'undefined'){
+          item.material.opacity = item.userData.origOpacity;
+          item.material.transparent = item.userData.origTransparent;
+        }
+      });
+    }
+  });
+
+  // Restore flow markers
+  if (typeof markerGroup !== 'undefined' && markerGroup){
+    markerGroup.visible = true;
+    if (typeof rebuildFlowCurves === 'function') rebuildFlowCurves();
+    if (typeof refreshConnections === 'function') refreshConnections();
+  }
+
+  // Clear tree selections
+  document.querySelectorAll('#tree .node.selected').forEach(n => n.classList.remove('selected'));
+
+  // Reset inspector
+  if (typeof clearSelection === 'function'){
+    clearSelection();
+  }
+}
+
+// =====================================================================
+// COMPATIBILITY EXPORTS & RENDER LOOP HOOK
+// =====================================================================
+
+function updateBuildAnimation(dt){
+  if (isTourPaused) return;
+  if (camLerp){
+    camLerp.elapsed += dt;
+    const p = Math.min(1.0, camLerp.elapsed / camLerp.duration);
+    const smoothP = p * p * (3.0 - 2.0 * p); // smoothstep
+    activeCamera.position.lerpVectors(camLerp.startPos, camLerp.endPos, smoothP);
+    controls.target.lerpVectors(camLerp.startTarget, camLerp.endTarget, smoothP);
+    controls.update();
+    if (p >= 1.0){
+      camLerp = null;
     }
   }
 }
 
-// Play / Pause / Resume / Replay button wiring
+window.startBuildAnimation = startTour;
+window.stopBuildAnimation = stopTour;
+window.pauseBuildAnimation = pauseTour;
+window.resumeBuildAnimation = resumeTour;
+
+// Play / Pause / Resume / Replay button listener
 if (btnBuildAnim){
   btnBuildAnim.addEventListener('click', function(){
-    if (!isBuildAnimating){
-      if (typeof window.hasSarvamApiKey === 'function' && !window.hasSarvamApiKey()){
-        if (typeof window.openSarvamApiKeyModal === 'function'){
-          window.openSarvamApiKeyModal(function(){
-            startBuildAnimation();
-          });
-          return;
-        }
-      }
-      startBuildAnimation();
-    } else if (isBuildPaused){
-      resumeBuildAnimation();
+    if (!isTourRunning){
+      startTour();
+    } else if (isTourPaused){
+      resumeTour();
     } else {
-      pauseBuildAnimation();
+      pauseTour();
     }
   });
 }
