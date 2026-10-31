@@ -780,6 +780,41 @@
     0% { transform: scale(0.85); opacity: 0.6; }
     100% { transform: scale(1.2); opacity: 1; }
   }
+  .va-status-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .va-play-btn {
+    border: 1px solid rgba(95, 217, 196, 0.45);
+    background: rgba(95, 217, 196, 0.12);
+    color: var(--accent);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .va-play-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    border-color: transparent;
+    background: transparent;
+  }
+  .va-play-btn:not(:disabled):hover {
+    background: rgba(95, 217, 196, 0.28);
+    border-color: var(--accent);
+  }
+  .va-play-btn.is-playing {
+    border-color: rgba(255, 47, 176, 0.6);
+    background: rgba(255, 47, 176, 0.18);
+    color: var(--highlight);
+  }
   .va-stop-btn {
     border: 1px solid rgba(239, 68, 68, 0.4);
     background: rgba(239, 68, 68, 0.1);
@@ -883,24 +918,34 @@
   .va-msg-body {
     word-break: break-word;
   }
-  .va-replay-btn {
-    align-self: flex-start;
+  .va-msg-actions {
     margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .va-replay-btn, .va-msg .va-play-btn {
+    align-self: flex-start;
     border: 1px solid var(--accent);
     background: rgba(95, 217, 196, 0.1);
     color: var(--accent);
     border-radius: 4px;
     font-family: var(--mono);
     font-size: 9px;
-    padding: 2px 7px;
+    padding: 2.5px 8px;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 4px;
     transition: all 0.15s ease;
   }
-  .va-replay-btn:hover {
+  .va-replay-btn:hover, .va-msg .va-play-btn:hover {
     background: rgba(95, 217, 196, 0.25);
+  }
+  .va-msg .va-play-btn.is-playing {
+    border-color: rgba(255, 47, 176, 0.6);
+    background: rgba(255, 47, 176, 0.2);
+    color: var(--highlight);
   }
 
   /* Input Row */
@@ -1082,4 +1127,336 @@
   :root[data-theme="light"] .va-send-btn:hover {
     background: #0f766e;
     border-color: #0f766e;
+  }
+
+  /* =========================================================================
+     SARVAM API KEY MODAL & KEY MANAGEMENT
+     ========================================================================= */
+  .va-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 7, 13, 0.82);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 16px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .va-modal-backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .va-modal-card {
+    background: linear-gradient(135deg, rgba(16, 24, 38, 0.98), rgba(11, 16, 26, 0.98));
+    border: 1px solid rgba(95, 217, 196, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 28px rgba(95, 217, 196, 0.14);
+    width: 100%;
+    max-width: 500px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: vaModalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes vaModalPop {
+    0% { transform: scale(0.93) translateY(8px); opacity: 0; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .va-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-soft);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .va-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .va-modal-title h3 {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text);
+    font-family: var(--sans);
+  }
+  .va-modal-icon {
+    font-size: 16px;
+  }
+  .va-modal-close {
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 15px;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    transition: all 0.15s ease;
+  }
+  .va-modal-close:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.12);
+  }
+  .va-modal-body {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .va-modal-desc {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 11.5px;
+  }
+  .va-modal-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    background: rgba(0, 0, 0, 0.24);
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .va-step-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+  }
+  .va-step-num {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(95, 217, 196, 0.15);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .va-link {
+    color: var(--accent);
+    text-decoration: underline;
+    font-weight: 600;
+    transition: color 0.15s ease;
+  }
+  .va-link:hover {
+    color: #a7f3d0;
+    text-shadow: 0 0 6px rgba(95, 217, 196, 0.4);
+  }
+  .va-modal-privacy-callout {
+    background: rgba(95, 217, 196, 0.08);
+    border: 1px solid rgba(95, 217, 196, 0.25);
+    border-radius: 7px;
+    padding: 9px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .va-privacy-badge {
+    font-size: 10px;
+    font-family: var(--mono);
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .va-modal-privacy-callout p {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-dim);
+  }
+  .va-modal-privacy-callout code {
+    font-family: var(--mono);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--text);
+  }
+  .va-modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .va-modal-field label {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--text-dim);
+    letter-spacing: 0.07em;
+  }
+  .va-input-group {
+    display: flex;
+    align-items: center;
+    position: relative;
+  }
+  .va-input-group input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 38px 8px 10px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .va-input-group input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(95, 217, 196, 0.2);
+  }
+  .va-eye-btn {
+    position: absolute;
+    right: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px;
+    border-radius: 4px;
+  }
+  .va-eye-btn:hover {
+    color: var(--text);
+  }
+  .va-field-msg {
+    font-size: 11px;
+    font-family: var(--sans);
+    padding: 5px 8px;
+    border-radius: 4px;
+  }
+  .va-field-msg.error {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+  .va-field-msg.success {
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.1);
+    border: 1px solid rgba(52, 211, 153, 0.25);
+  }
+  .va-field-msg.info {
+    color: var(--accent);
+    background: rgba(95, 217, 196, 0.1);
+    border: 1px solid rgba(95, 217, 196, 0.2);
+  }
+  .va-modal-options {
+    display: flex;
+    align-items: center;
+  }
+  .va-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .va-checkbox-label input {
+    cursor: pointer;
+    accent-color: var(--accent);
+  }
+  .va-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border-soft);
+    background: rgba(0, 0, 0, 0.2);
+  }
+  .va-footer-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .va-btn-primary {
+    background: var(--accent);
+    color: #05070d;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .va-btn-primary:hover:not(:disabled) {
+    background: #a7f3d0;
+    border-color: #a7f3d0;
+    box-shadow: 0 0 12px rgba(95, 217, 196, 0.4);
+    transform: translateY(-1px);
+  }
+  .va-btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .va-btn-cancel, .va-btn-secondary {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .va-btn-cancel:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .va-btn-secondary:hover {
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.12);
+  }
+
+  /* Light theme adjustments */
+  :root[data-theme="light"] .va-modal-card {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  }
+  :root[data-theme="light"] .va-modal-header {
+    background: #f8fafc;
+    border-bottom-color: #e2e8f0;
+  }
+  :root[data-theme="light"] .va-modal-steps {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+  }
+  :root[data-theme="light"] .va-modal-privacy-callout {
+    background: rgba(13, 148, 136, 0.08);
+    border-color: rgba(13, 148, 136, 0.25);
+  }
+  :root[data-theme="light"] .va-input-group input {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    color: #0f172a;
+  }
+  :root[data-theme="light"] .va-modal-footer {
+    background: #f8fafc;
+    border-top-color: #e2e8f0;
   }

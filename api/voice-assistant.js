@@ -9,7 +9,7 @@
  * 4. Progressive streaming of audio/wav chunks back to the client with X-Explanation-Text header.
  */
 
-const SARVAM_API_KEY = process.env.SARVAM_API_KEY || 'sk_rz1l4gj4_NJv1arqPEbELRJOs53y5woaW';
+const SARVAM_API_KEY = process.env.SARVAM_API_KEY || '';
 
 // Valid speaker personas for Sarvam Bulbul v4 Flash
 const SPEAKER_MAP = {
@@ -32,26 +32,28 @@ const SPEAKER_MAP = {
  */
 function getFallbackExplanation(question, context, lang) {
   const comp = context && context.title ? context.title : 'CMOS Inverter';
-  const role = context && context.role ? context.role : 'Complementary MOSFET logic inversion.';
-  const state = context && context.circuitState ? `Input is ${context.circuitState.in}, PMOS is ${context.circuitState.pmos}, NMOS is ${context.circuitState.nmos}, and Output is ${context.circuitState.out}.` : '';
+  const role = context && context.role ? context.role : 'performing complementary digital logic inversion.';
+  const state = context && context.circuitState ? `In our current circuit state, the input is ${context.circuitState.in}, PMOS is ${context.circuitState.pmos}, NMOS is ${context.circuitState.nmos}, and Output is ${context.circuitState.out}.` : '';
 
   if (lang === 'hi-IN') {
-    return `${comp} सीमॉस इन्वर्टर का एक आवश्यक हिस्सा है। यह ${role} वर्तमान स्थिति में, ${state}`;
+    return `सीमॉस इन्वर्टर में प्रत्येक परत एक महत्वपूर्ण भौतिक समस्या को हल करती है। ${comp} का मुख्य कार्य ${role} वर्तमान स्थिति में, ${state}`;
   } else if (lang === 'te-IN') {
-    return `${comp} అనేది సిమోస్ ఇన్వర్టర్‌లో కీలకమైన భాగం. ఇది ${role} ప్రస్తుత స్థితిలో, ${state}`;
+    return `సిమోస్ ఇన్వర్టర్‌లో ప్రతి పొర ఒక ముఖ్యమైన భౌతిక సమస్యను పరిష్కరిస్తుంది. ${comp} యొక్క ముఖ్య ఉద్దేశ్యం ${role} ప్రస్తుత స్థితిలో, ${state}`;
   } else {
-    return `${comp} is an essential physical element in this CMOS inverter layout. It functions to ${role} Under the current logic state, ${state}`;
+    return `Every physical layer in this CMOS layout solves a critical electrical challenge. The ${comp} fulfills this requirement by ${role} ${state}`;
   }
 }
 
 /**
  * Generate student-friendly VLSI explanation via Sarvam LLM
  */
-async function generateExplanation(question, context, langCode) {
+async function generateExplanation(question, context, langCode, apiKey) {
   const langName = langCode === 'hi-IN' ? 'Hindi (hi-IN)' : (langCode === 'te-IN' ? 'Telugu (te-IN)' : 'English (en-IN)');
   
   const systemPrompt = `You are an expert CMOS VLSI tutor and layout educator for an interactive 3D CMOS Inverter CAD viewer.
-Provide a crisp, clear, student-friendly explanation (2 to 3 concise sentences maximum, ~45-65 words) in ${langName} that directly answers the user's question using the provided component metadata, lambda design rules, and circuit state.
+Never use a mechanical "Step 1, Step 2" or numbered list format. Instead, use a cohesive, engaging storytelling format.
+Whenever explaining fabrication, layout, or components, always connect the physical or electrical problem ("the why", such as mechanical support, isolating polarities, preventing short-circuits or quantum leakage, supplying charge carriers, or routing signals) with the physical layer or component acting as the solution ("the what", exactly as it appears on screen).
+Provide a crisp, clear, student-friendly explanation (2 to 3 concise spoken sentences, ~45-65 words) in ${langName} that directly answers the user's question using the provided component metadata, lambda design rules, and circuit state.
 Never use markdown formatting, bold asterisks, bullet points, numbered lists, or awkward raw equations that sound unnatural when spoken aloud. Use natural conversational phrasing specifically crafted for voice speech synthesis in ${langName}.`;
 
   const ctxSummary = context ? [
@@ -69,12 +71,16 @@ ${ctxSummary}
 
 User Question: ${question || 'Explain the role and physics of this component in the CMOS inverter.'}`;
 
+  if (!apiKey) {
+    return getFallbackExplanation(question, context, langCode);
+  }
+
   try {
     const chatRes = await fetch('https://api.sarvam.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api-subscription-key': SARVAM_API_KEY
+        'api-subscription-key': apiKey
       },
       body: JSON.stringify({
         model: 'sarvam-105b-conversations',
@@ -148,6 +154,14 @@ module.exports = async function handler(req, res) {
     });
   }
 
+  const userApiKey = req.headers['api-subscription-key'] || req.headers['x-sarvam-api-key'] || (body && body.api_key) || SARVAM_API_KEY;
+  if (!userApiKey) {
+    return res.status(401).json({
+      error: 'Missing Sarvam API Key',
+      message: 'Please provide a valid Sarvam AI API subscription key in localStorage or request headers.'
+    });
+  }
+
   const question = (body.question || '').trim();
   const context = body.context || {};
   let langCode = body.language_code || 'en-IN';
@@ -161,14 +175,14 @@ module.exports = async function handler(req, res) {
 
   try {
     // 1. Generate text explanation from LLM
-    const explanationText = await generateExplanation(question, context, langCode);
+    const explanationText = await generateExplanation(question, context, langCode, userApiKey);
 
     // 2. Stream audio from Sarvam Bulbul v4 Flash
     const ttsRes = await fetch('https://api.sarvam.ai/text-to-speech/stream', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api-subscription-key': SARVAM_API_KEY
+        'api-subscription-key': userApiKey
       },
       body: JSON.stringify({
         text: explanationText,

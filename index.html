@@ -278,6 +278,7 @@
               <span class="bar"></span>
               <span class="bar"></span>
             </div>
+            <button class="va-hdr-btn" id="va-btn-settings" title="Sarvam API Key Settings" aria-label="API Key Settings">⚙️</button>
             <button class="va-hdr-btn" id="va-btn-minimize" title="Minimize assistant" aria-label="Minimize">─</button>
             <button class="va-hdr-btn" id="va-btn-close" title="Close assistant" aria-label="Close">✕</button>
           </div>
@@ -314,7 +315,10 @@
             <span class="va-status-dot"></span>
             <span class="va-status-text" id="va-status-text">AI Tutor Ready</span>
           </div>
-          <button class="va-stop-btn" id="va-btn-stop" title="Stop audio playback" disabled>⏹ Stop</button>
+          <div class="va-status-actions">
+            <button class="va-play-btn" id="va-btn-play" title="Play / Pause narration" disabled>▶ Play</button>
+            <button class="va-stop-btn" id="va-btn-stop" title="Stop audio playback" disabled>⏹ Stop</button>
+          </div>
         </div>
 
         <div class="va-chips-scroll">
@@ -380,6 +384,71 @@
       </svg>
       <span class="credit-text">GitHub</span>
     </a>
+  </div>
+
+  <!-- Interactive Sarvam AI API Key Modal -->
+  <div id="va-key-modal" class="va-modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="va-modal-title">
+    <div class="va-modal-card">
+      <div class="va-modal-header">
+        <div class="va-modal-title">
+          <span class="va-modal-icon">🔑</span>
+          <h3 id="va-modal-title">Sarvam AI API Key Required</h3>
+        </div>
+        <button class="va-modal-close" id="va-modal-close-btn" aria-label="Close modal">✕</button>
+      </div>
+
+      <div class="va-modal-body">
+        <p class="va-modal-desc">
+          To enable live 3D CMOS voice tutoring, interactive transistor physics Q&amp;A, and step-by-step fabrication audio narration, connect your personal Sarvam AI API subscription key.
+        </p>
+
+        <div class="va-modal-steps">
+          <div class="va-step-item">
+            <span class="va-step-num">1</span>
+            <span>Sign in or create a free account at <a href="https://dashboard.sarvam.ai" target="_blank" rel="noopener noreferrer" class="va-link">https://dashboard.sarvam.ai ↗</a></span>
+          </div>
+          <div class="va-step-item">
+            <span class="va-step-num">2</span>
+            <span>Navigate to <b>API Keys</b> in the dashboard and create a new API subscription key.</span>
+          </div>
+          <div class="va-step-item">
+            <span class="va-step-num">3</span>
+            <span>Paste your key below and click <b>Save &amp; Test Voice</b> to verify and start listening.</span>
+          </div>
+        </div>
+
+        <div class="va-modal-privacy-callout">
+          <span class="va-privacy-badge">🔒 Privacy Guarantee</span>
+          <p>
+            Your API key will <b>not be used by us</b> — it is stored securely on your local device and used directly to communicate with Sarvam AI. It will be deleted after you exit the session. We never save, store, or transmit your credentials to our servers.
+          </p>
+        </div>
+
+        <div class="va-modal-field">
+          <label for="va-input-apikey">SARVAM API SUBSCRIPTION KEY</label>
+          <div class="va-input-group">
+            <input type="password" id="va-input-apikey" placeholder="Paste your Sarvam API subscription key (sk_...)" autocomplete="off" spellcheck="false">
+            <button type="button" id="va-btn-toggle-key-visibility" class="va-eye-btn" title="Toggle visibility">👁️</button>
+          </div>
+          <div id="va-key-status-msg" class="va-field-msg" style="display:none;"></div>
+        </div>
+
+        <div class="va-modal-options">
+          <label class="va-checkbox-label">
+            <input type="checkbox" id="va-chk-session-only" checked>
+            <span>Delete API key when exiting session (on browser/tab close)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="va-modal-footer">
+        <button id="va-modal-clear-btn" class="va-btn-secondary" style="display:none;">Clear Key</button>
+        <div class="va-footer-right">
+          <button id="va-modal-cancel-btn" class="va-btn-cancel">Cancel</button>
+          <button id="va-modal-save-btn" class="va-btn-primary">Save &amp; Test Voice 🔊</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
