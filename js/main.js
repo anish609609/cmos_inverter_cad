@@ -13,10 +13,12 @@ var rightToggleBtn = document.getElementById('right-toggle');
 leftToggleBtn.addEventListener('click', function(){
   var open = leftPanel.classList.toggle('open');
   leftToggleBtn.classList.toggle('is-open', open);
+  leftToggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
 });
 rightToggleBtn.addEventListener('click', function(){
   var open = rightPanel.classList.toggle('open');
   rightToggleBtn.classList.toggle('is-open', open);
+  rightToggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   updateViewHudPosition();
 });
 
@@ -24,11 +26,17 @@ rightToggleBtn.addEventListener('click', function(){
 // letting the drawer cover it — slide it left by the drawer's actual width.
 var viewHud = document.getElementById('view-hud');
 function updateViewHudPosition(){
+  var launcher = document.getElementById('va-launcher-btn');
+  var vaWidget = document.getElementById('voice-assistant-widget');
   if (rightPanel.classList.contains('open')){
     var w = rightPanel.getBoundingClientRect().width;
     viewHud.style.right = (w + 14) + 'px';
+    if (launcher) launcher.style.right = (w + 14) + 'px';
+    if (vaWidget) vaWidget.style.right = (w + 14) + 'px';
   } else {
     viewHud.style.right = '';
+    if (launcher) launcher.style.right = '';
+    if (vaWidget) vaWidget.style.right = '';
   }
 }
 window.addEventListener('resize', updateViewHudPosition);
@@ -54,13 +62,12 @@ function resetAll(){
   controls.target.set(-0.5, 0, 0);
   controls.update();
 
-  explodeSlider.value = 1;
-  applyExplode(1);
+  applyExplode(0, 1, 0);
 
   resetScrub();
 
-  currentIn = 0;
-  inSeg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.in === '0'); });
+  currentIn = 'off';
+  inSeg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.in === 'off'); });
   flowMode = 'current';
   flowSeg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.flow === 'current'); });
   applyLogicState();

@@ -46,9 +46,9 @@
     <div class="in-toggle">
       IN =
       <div class="seg" id="in-seg">
-        <button data-in="0" class="active">0</button>
+        <button data-in="0">0</button>
         <button data-in="1">1</button>
-        <button data-in="off">OFF</button>
+        <button data-in="off" class="active">OFF</button>
       </div>
     </div>
     <div class="seg" id="flow-seg" title="Direction convention for the animated flow markers on whichever transistor is ON">
@@ -83,11 +83,15 @@
 
   <div id="body-row">
 
-    <button class="panel-toggle" id="left-toggle" title="Layers &amp; legend" aria-label="Toggle layers panel">
-      <svg viewBox="0 0 6 20" width="6" height="20" aria-hidden="true"><circle cx="3" cy="3" r="2.4"/><circle cx="3" cy="10" r="2.4"/><circle cx="3" cy="17" r="2.4"/></svg>
+    <button class="panel-toggle" id="left-toggle" title="Toggle layers &amp; legend panel" aria-label="Toggle layers panel" aria-expanded="false">
+      <svg class="toggle-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
     </button>
-    <button class="panel-toggle" id="right-toggle" title="Inspector &amp; tree" aria-label="Toggle inspector panel">
-      <svg viewBox="0 0 6 20" width="6" height="20" aria-hidden="true"><circle cx="3" cy="3" r="2.4"/><circle cx="3" cy="10" r="2.4"/><circle cx="3" cy="17" r="2.4"/></svg>
+    <button class="panel-toggle" id="right-toggle" title="Toggle inspector &amp; tree panel" aria-label="Toggle inspector panel" aria-expanded="false">
+      <svg class="toggle-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
     </button>
 
     <div id="left-panel">
@@ -238,20 +242,28 @@
       <div class="hud interactive" id="view-hud">
         <div class="vh-title" id="view-hud-toggle"><span>VIEW CONTROLS</span><span class="chev" id="view-hud-chev">▾</span></div>
         <div class="vh-body" id="view-hud-body">
-          <div class="vh-row"><label>EXPLODE LAYERS</label><span class="val" id="explode-val">1%</span></div>
-          <input type="range" id="explode-slider" min="0" max="100" value="1">
+          <div class="vh-section-title">EXPLODE</div>
+          <div class="vh-row"><label>EXPLODE X</label><span class="val" id="explode-x-val">0%</span></div>
+          <input type="range" id="explode-x-slider" min="0" max="100" value="0">
+          <div class="vh-row"><label>EXPLODE Y</label><span class="val" id="explode-y-val">1%</span></div>
+          <input type="range" id="explode-y-slider" min="0" max="100" value="1">
+          <div class="vh-row"><label>EXPLODE Z</label><span class="val" id="explode-z-val">0%</span></div>
+          <input type="range" id="explode-z-slider" min="0" max="100" value="0">
+
           <div class="vh-sep"></div>
+
+          <div class="vh-section-title">SCRUB</div>
           <div class="vh-row"><label>SCRUB X</label><span class="val" id="scrub-x-val">off</span></div>
-          <input type="range" id="scrub-x-slider" min="-1250" max="1250" value="1250">
+          <input type="range" id="scrub-x-slider" min="-1250" max="3500" value="3500">
           <div class="vh-row"><label>SCRUB Y</label><span class="val" id="scrub-y-val">off</span></div>
-          <input type="range" id="scrub-y-slider" min="-100" max="2200" value="2200">
+          <input type="range" id="scrub-y-slider" min="-100" max="5000" value="5000">
           <div class="vh-row"><label>SCRUB Z</label><span class="val" id="scrub-z-val">off</span></div>
-          <input type="range" id="scrub-z-slider" min="-1800" max="1800" value="1800">
+          <input type="range" id="scrub-z-slider" min="-1800" max="3500" value="3500">
         </div>
       </div>
 
       <!-- AI Voice Assistant Widget (Sarvam Bulbul v4 Flash) -->
-      <div id="voice-assistant-widget" class="va-widget">
+      <div id="voice-assistant-widget" class="va-widget minimized">
         <div class="va-header">
           <div class="va-header-title">
             <span class="va-pulse-icon">🎙️</span>
@@ -276,7 +288,7 @@
             <span class="va-ctx-tag">CONTEXT</span>
             <span class="va-ctx-val" id="va-ctx-val">None (Full Layout)</span>
           </div>
-          <div class="va-ctx-state" id="va-ctx-state">IN=0 → PMOS ON · OUT=1</div>
+          <div class="va-ctx-state" id="va-ctx-state">IN=OFF → HIGH-Z / FLOATING</div>
         </div>
 
         <div class="va-settings-row">
@@ -329,11 +341,14 @@
         </div>
       </div>
 
-      <!-- Minimized Floating Launcher Button -->
-      <button id="va-launcher-btn" class="va-launcher-btn" title="Open AI Voice Tutor">
-        <span class="va-launcher-icon">🎙️</span>
-        <span class="va-launcher-title">AI Voice Tutor</span>
-        <span class="va-launcher-badge">bulbul:v4-flash</span>
+      <!-- Sleek Floating Action Button (FAB) for AI Voice Tutor -->
+      <button id="va-launcher-btn" class="va-launcher-btn visible" title="Open AI Voice Tutor" aria-label="Open AI Voice Tutor">
+        <svg class="va-fab-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
       </button>
 
     </div>

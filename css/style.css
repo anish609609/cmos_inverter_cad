@@ -161,17 +161,21 @@
     position:absolute; top:50%; transform:translateY(-50%);
     width:26px; height:64px; z-index:40; cursor:pointer;
     background:var(--panel); border:1px solid var(--accent-dim); color:var(--accent);
-    font-size:20px; font-weight:700; line-height:1; display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:700; line-height:1; display:flex; align-items:center; justify-content:center;
     letter-spacing:0; padding:0; transition:transform .18s ease, background .18s ease, box-shadow .18s ease, border-color .18s ease;
   }
-  .panel-toggle svg circle{ fill: currentColor; transition: r .18s ease, fill .18s ease; }
+  .panel-toggle .toggle-icon{
+    display:block;
+    transition:transform .22s cubic-bezier(0.16, 1, 0.3, 1), stroke .18s ease;
+  }
   .panel-toggle:hover{ background:#182a26; border-color:var(--accent); box-shadow:0 0 14px rgba(95,217,196,.4); }
-  .panel-toggle:hover svg circle{ r:2.8; }
   .panel-toggle.is-open{ color:#08110f; background:var(--accent); border-color:var(--accent); }
   #left-toggle{ left:0; border-radius:0 8px 8px 0; }
   #left-toggle:hover{ transform:translateY(-50%) translateX(2px); }
+  #left-toggle.is-open .toggle-icon{ transform:rotate(180deg); }
   #right-toggle{ right:0; border-radius:8px 0 0 8px; }
   #right-toggle:hover{ transform:translateY(-50%) translateX(-2px); }
+  #right-toggle.is-open .toggle-icon{ transform:rotate(180deg); }
 
   .panel-section{ border-bottom:1px solid var(--border-soft); }
   .panel-head{
@@ -370,7 +374,8 @@
   #view-hud label{ font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:.04em; }
   #view-hud .val{ font-family:var(--mono); font-size:9px; color:var(--accent); }
   #view-hud input[type=range]{ width:100%; accent-color: var(--accent); margin-bottom:9px; display:block; }
-  #view-hud .vh-sep{ height:1px; background:var(--border-soft); margin:2px 0 9px 0; }
+  #view-hud .vh-section-title{ font-family:var(--mono); font-size:9px; letter-spacing:.08em; color:var(--accent); font-weight:600; margin:6px 0 5px 0; }
+  #view-hud .vh-sep{ height:1px; background:var(--border-soft); margin:6px 0 8px 0; }
 
   #loading{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px;
@@ -549,41 +554,43 @@
     display: none;
   }
 
-  /* Minimized Floating Launcher Button */
+  /* Sleek Circular Floating Action Button (FAB) */
   #va-launcher-btn {
     position: absolute;
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     right: calc(260px + env(safe-area-inset-right, 0px));
     display: none;
     align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
     background: var(--panel);
-    border: 1px solid var(--accent);
-    border-radius: 999px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 600;
+    border: 1.5px solid var(--accent);
+    border-radius: 50%;
+    color: var(--accent);
     cursor: pointer;
     z-index: 24;
     pointer-events: auto;
-    box-shadow: 0 4px 18px rgba(95, 217, 196, 0.28);
-    transition: transform 0.15s ease, box-shadow 0.15s ease, right 0.2s ease;
+    box-shadow: 0 4px 18px rgba(95, 217, 196, 0.32);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, right 0.2s ease, background 0.18s ease;
   }
   #va-launcher-btn.visible {
     display: inline-flex;
   }
   #va-launcher-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 22px rgba(95, 217, 196, 0.45);
+    transform: translateY(-2px) scale(1.06);
+    background: #182a26;
+    border-color: #8ef0d9;
+    box-shadow: 0 6px 24px rgba(95, 217, 196, 0.55);
   }
-  #va-launcher-btn .va-launcher-badge {
-    background: rgba(95, 217, 196, 0.15);
-    color: var(--accent);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 9.5px;
+  #va-launcher-btn:active {
+    transform: translateY(0) scale(0.96);
+  }
+  .va-fab-icon {
+    display: block;
+    stroke: currentColor;
+    transition: stroke 0.15s ease;
   }
 
   /* Widget Header */
@@ -987,7 +994,9 @@
       bottom: 50px;
     }
     #va-launcher-btn {
-      right: 10px;
+      width: 44px;
+      height: 44px;
+      right: 12px;
       bottom: 50px;
     }
   }
@@ -1001,12 +1010,13 @@
   :root[data-theme="light"] #va-launcher-btn {
     background: #ffffff;
     border-color: #0d9488;
-    color: #0f172a;
-    box-shadow: 0 4px 18px rgba(13, 148, 136, 0.2);
-  }
-  :root[data-theme="light"] #va-launcher-btn .va-launcher-badge {
-    background: rgba(13, 148, 136, 0.12);
     color: #0d9488;
+    box-shadow: 0 4px 18px rgba(13, 148, 136, 0.22);
+  }
+  :root[data-theme="light"] #va-launcher-btn:hover {
+    background: #f0fdfa;
+    border-color: #0f766e;
+    box-shadow: 0 6px 24px rgba(13, 148, 136, 0.4);
   }
   :root[data-theme="light"] .va-header {
     background: #f8fafc;

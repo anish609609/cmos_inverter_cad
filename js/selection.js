@@ -129,9 +129,54 @@ function selectById(id){
 
 // raycaster click — hitting the model selects + anchors the popover;
 // clicking empty background dismisses it.
+// Uses pointerdown/move tracking to ensure drags/orbits never trigger false selections.
 var raycaster = new THREE.Raycaster();
 var pointer = new THREE.Vector2();
+
+var pointerDownCanvas = false;
+var pointerDownPos = { x: 0, y: 0 };
+var isDragCanvas = false;
+var DRAG_DISTANCE_THRESHOLD = 6; // px
+
+renderer.domElement.addEventListener('pointerdown', function(e){
+  if (e.button !== 0) return;
+  pointerDownCanvas = true;
+  pointerDownPos.x = e.clientX;
+  pointerDownPos.y = e.clientY;
+  isDragCanvas = false;
+});
+
+window.addEventListener('pointermove', function(e){
+  if (!pointerDownCanvas) return;
+  var dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+  if (dist > DRAG_DISTANCE_THRESHOLD){
+    isDragCanvas = true;
+  }
+});
+
+window.addEventListener('pointerup', function(e){
+  if (pointerDownCanvas){
+    var dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+    if (dist > DRAG_DISTANCE_THRESHOLD){
+      isDragCanvas = true;
+    }
+  }
+  setTimeout(function(){
+    pointerDownCanvas = false;
+    isDragCanvas = false;
+  }, 40);
+});
+
 renderer.domElement.addEventListener('click', function(e){
+  // Reject false clicks: dragged orbits, or mouse released after clicking elsewhere
+  if (!pointerDownCanvas || isDragCanvas){
+    return;
+  }
+  var dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+  if (dist > DRAG_DISTANCE_THRESHOLD){
+    return;
+  }
+
   var rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((e.clientX-rect.left)/rect.width)*2-1;
   pointer.y = -((e.clientY-rect.top)/rect.height)*2+1;

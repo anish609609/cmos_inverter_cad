@@ -9,15 +9,15 @@
 var host = document.getElementById('canvas-host');
 var scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0d12);
-scene.fog = new THREE.Fog(0x0a0d12, 55, 130);
+scene.fog = new THREE.Fog(0x0a0d12, 60, 220);
 
 var W = function(){ return host.clientWidth; };
 var H = function(){ return host.clientHeight; };
 
-var camPersp = new THREE.PerspectiveCamera(42, W()/H(), 0.1, 500);
+var camPersp = new THREE.PerspectiveCamera(42, W()/H(), 0.1, 1000);
 var INITIAL_POS = new THREE.Vector3(20, 16, 25);
 var INITIAL_TARGET = new THREE.Vector3(-0.5, 1.9, 0);
-var TOP_VIEW_POS = new THREE.Vector3(-0.5, 42, 0.05); // straight overhead, tiny Z offset avoids gimbal-lock flip
+var TOP_VIEW_POS = new THREE.Vector3(-0.5, 52, 0.05); // straight overhead, captures full 100% exploded stack
 camPersp.position.copy(INITIAL_POS);
 
 var renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
@@ -33,7 +33,7 @@ controls.target.copy(INITIAL_TARGET);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.minDistance = 4;
-controls.maxDistance = 85;
+controls.maxDistance = 160;
 controls.maxPolarAngle = Math.PI;   // full orbit — including looking up from underneath
 controls.minPolarAngle = 0;
 controls.update();
@@ -85,7 +85,7 @@ function applySceneTheme(theme){
     if (scene.fog){
       scene.fog.color.setHex(0xf4f6f8);
       scene.fog.near = 60;
-      scene.fog.far = 140;
+      scene.fog.far = 240;
     }
     ambientLight.color.setHex(0xe2e8f0);
     ambientLight.intensity = 1.7; // Enhanced ambient illumination for crisp light mode
@@ -100,8 +100,8 @@ function applySceneTheme(theme){
     scene.background = new THREE.Color(0x0a0d12);
     if (scene.fog){
       scene.fog.color.setHex(0x0a0d12);
-      scene.fog.near = 55;
-      scene.fog.far = 130;
+      scene.fog.near = 60;
+      scene.fog.far = 220;
     }
     ambientLight.color.setHex(0x2a3140);
     ambientLight.intensity = 1.1;

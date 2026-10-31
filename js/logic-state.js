@@ -6,7 +6,7 @@
 // =====================================================================
 // IN = 0 / 1 / OFF (HIGH-Z) LOGICAL STATE
 // =====================================================================
-var currentIn = 0; // 0 | 1 | 'off'
+var currentIn = 'off'; // 0 | 1 | 'off'
 var stateBadge = document.getElementById('state-badge');
 var inSeg = document.getElementById('in-seg');
 

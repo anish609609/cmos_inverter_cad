@@ -51,6 +51,11 @@
   var speechRecognition = null;
   var isRecognizing = false;
 
+  // ---- Audio Queue & Cancellation Token ----
+  var currentPlaybackToken = 0;
+  var currentAbortController = null;
+  var currentReplayAudio = null;
+
   // DOM Elements (cached after init)
   var widgetEl = null;
   var launcherEl = null;
@@ -84,14 +89,41 @@
   }
 
   function stopAudioPlayback(){
-    // Stop all actively scheduled buffer source nodes
+    // Immediately invalidate all pending async loops, scheduled audio buffers, and tokens
+    currentPlaybackToken++;
+
+    // 1. Abort in-flight network requests
+    if (currentAbortController){
+      try { currentAbortController.abort(); } catch(e){}
+      currentAbortController = null;
+    }
+
+    // 2. Halt Web Speech API speech
+    if ('speechSynthesis' in window){
+      try { window.speechSynthesis.cancel(); } catch(e){}
+    }
+
+    // 3. Stop standalone replay audio elements
+    if (currentReplayAudio){
+      try {
+        currentReplayAudio.pause();
+        currentReplayAudio.currentTime = 0;
+      } catch(e){}
+      currentReplayAudio = null;
+    }
+
+    // 4. Stop all actively scheduled Web Audio buffer source nodes
     activeSources.forEach(function(src){
-      try { src.stop(); src.disconnect(); } catch(e){}
+      try {
+        src.onended = null;
+        src.stop(0);
+        src.disconnect();
+      } catch(e){}
     });
     activeSources = [];
     isPlaying = false;
 
-    // Stop visualizer animation
+    // 5. Stop visualizer animation
     if (animFrameId){
       cancelAnimationFrame(animFrameId);
       animFrameId = null;
@@ -261,20 +293,125 @@
     responseArea.scrollTop = responseArea.scrollHeight;
   }
 
+  // =========================================================================
+  // STEP-BY-STEP CMOS BUILD ANIMATION NARRATION (30-SECOND SEQUENCE)
+  // =========================================================================
+  function startSyntheticVisualizer(){
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+    var t = 0;
+    function step(){
+      t += 0.18;
+      for (var i = 0; i < visualizerBars.length; i++){
+        var wave = Math.sin(t + i * 1.3) * 0.5 + 0.5;
+        var h = Math.max(3, Math.round(wave * 18 + 4));
+        visualizerBars[i].style.height = h + 'px';
+        visualizerBars[i].style.opacity = (wave > 0.2) ? '1' : '0.4';
+      }
+      animFrameId = requestAnimationFrame(step);
+    }
+    animFrameId = requestAnimationFrame(step);
+  }
+
+  window.playVoiceNarration = function(stepIndex, title, textDict, durationSec){
+    var text = (typeof textDict === 'object' && textDict) ? (textDict[currentLang] || textDict['en-IN'] || textDict.text) : textDict;
+    if (!text) return;
+
+    // Immediately halt all existing playback and cancel any in-flight requests
+    stopAudioPlayback();
+    var thisToken = ++currentPlaybackToken;
+
+    isPlaying = true;
+    if (ctxVal) ctxVal.textContent = title;
+    updateStatus('speaking', 'Explaining ' + title + '...');
+    if (stopBtn) stopBtn.disabled = false;
+
+    // Append / display in assistant message area
+    appendMessage('ai', text);
+
+    // Speak using Web Speech API
+    if ('speechSynthesis' in window){
+      try { window.speechSynthesis.cancel(); } catch(e){}
+      var utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = currentLang || 'en-IN';
+      var voices = window.speechSynthesis.getVoices();
+      if (voices && voices.length > 0){
+        var match = voices.find(function(v){ return v.lang === currentLang; }) ||
+                    voices.find(function(v){ return v.lang && v.lang.startsWith((currentLang || 'en').split('-')[0]); });
+        if (match) utterance.voice = match;
+      }
+      utterance.rate = 1.08;
+      utterance.onstart = function(){
+        if (thisToken !== currentPlaybackToken) return;
+        startSyntheticVisualizer();
+      };
+      utterance.onend = function(){
+        if (thisToken !== currentPlaybackToken) return;
+        if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId = null; }
+        resetVisualizer();
+      };
+      utterance.onerror = function(){
+        if (thisToken !== currentPlaybackToken) return;
+        if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId = null; }
+        resetVisualizer();
+      };
+      window.speechSynthesis.speak(utterance);
+    } else {
+      startSyntheticVisualizer();
+      setTimeout(function(){
+        if (thisToken !== currentPlaybackToken) return;
+        if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId = null; }
+        resetVisualizer();
+      }, (durationSec || 3.5) * 1000);
+    }
+  };
+
+  window.pauseVoiceNarration = function(){
+    if ('speechSynthesis' in window && window.speechSynthesis.speaking){
+      try { window.speechSynthesis.pause(); } catch(e){}
+    }
+    if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId = null; }
+    resetVisualizer();
+    updateStatus('ready', 'Narration Paused');
+  };
+
+  window.resumeVoiceNarration = function(){
+    if ('speechSynthesis' in window && window.speechSynthesis.paused){
+      try { window.speechSynthesis.resume(); } catch(e){}
+    }
+    startSyntheticVisualizer();
+    updateStatus('speaking', 'Speaking...');
+  };
+
+  window.stopVoiceNarration = function(){
+    stopAudioPlayback();
+  };
+
   function playCompleteAudioBlob(url){
     stopAudioPlayback();
+    var thisToken = ++currentPlaybackToken;
+
     var audio = new Audio(url);
+    currentReplayAudio = audio;
     isPlaying = true;
     if (stopBtn) stopBtn.disabled = false;
     updateStatus('speaking', 'Speaking...');
+    startSyntheticVisualizer();
 
     audio.onended = function(){
+      if (thisToken !== currentPlaybackToken) return;
       isPlaying = false;
+      currentReplayAudio = null;
+      if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId = null; }
+      resetVisualizer();
       if (stopBtn) stopBtn.disabled = true;
       updateStatus('ready', 'AI Tutor Ready');
     };
     audio.onerror = function(){
+      if (thisToken !== currentPlaybackToken) return;
       isPlaying = false;
+      currentReplayAudio = null;
+      if (animFrameId){ cancelAnimationFrame(animFrameId); animFrameId = null; }
+      resetVisualizer();
       if (stopBtn) stopBtn.disabled = true;
       updateStatus('ready', 'AI Tutor Ready');
     };
@@ -285,7 +422,7 @@
   // STREAMING QUERY & PROGRESSIVE WEB AUDIO QUEUE
   // =========================================================================
 
-  async function generateDirectExplanation(question, context, langCode){
+  async function generateDirectExplanation(question, context, langCode, signal){
     var langName = (langCode === 'hi-IN') ? 'Hindi (hi-IN)' : ((langCode === 'te-IN') ? 'Telugu (te-IN)' : 'English (en-IN)');
     var systemPrompt = 'You are an expert CMOS VLSI tutor and layout educator for an interactive 3D CMOS Inverter CAD viewer. ' +
       'Provide a crisp, clear, student-friendly explanation (2 to 3 concise sentences maximum, ~45-65 words) in ' + langName + ' that directly answers the user\'s question using the provided component metadata, lambda design rules, and circuit state. ' +
@@ -318,7 +455,8 @@
           ],
           max_tokens: 160,
           temperature: 0.3
-        })
+        }),
+        signal: signal
       });
 
       if (res.ok) {
@@ -329,6 +467,7 @@
         }
       }
     } catch(err) {
+      if (err.name === 'AbortError') throw err;
       console.warn('[VoiceAssistant] Direct chat completion error:', err);
     }
 
@@ -357,7 +496,12 @@
       text = 'Explain the selected component and how it functions.';
     }
 
+    // Immediately halt all existing playback, cancel any in-flight requests, and increment token
     stopAudioPlayback();
+    var thisToken = ++currentPlaybackToken;
+    currentAbortController = new AbortController();
+    var signal = currentAbortController.signal;
+
     isThinking = true;
     updateStatus('thinking', 'Thinking...');
     if (sendBtn) sendBtn.disabled = true;
@@ -382,6 +526,8 @@
       } catch(e){}
     }
 
+    if (thisToken !== currentPlaybackToken || signal.aborted) return;
+
     try {
       updateStatus('synthesizing', 'Synthesizing audio...');
 
@@ -401,8 +547,11 @@
         var response = await fetch('/api/voice-assistant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: signal
         });
+
+        if (thisToken !== currentPlaybackToken || signal.aborted) return;
 
         if (response.ok && response.body) {
           var rawHeaderText = response.headers.get('x-explanation-text');
@@ -413,13 +562,18 @@
           backendSuccess = true;
         }
       } catch (backendErr) {
+        if (backendErr.name === 'AbortError' || thisToken !== currentPlaybackToken) return;
         console.log('[VoiceAssistant] Backend route unavailable (' + backendErr.message + '), falling back to direct Sarvam AI engine.');
       }
+
+      if (thisToken !== currentPlaybackToken || signal.aborted) return;
 
       // 2. Direct browser-to-Sarvam engine fallback if backend route is unavailable (e.g. static hosting, Live Server)
       if (!backendSuccess) {
         updateStatus('thinking', 'Thinking...');
-        explanationText = await generateDirectExplanation(text, activeContext, currentLang);
+        explanationText = await generateDirectExplanation(text, activeContext, currentLang, signal);
+
+        if (thisToken !== currentPlaybackToken || signal.aborted) return;
 
         updateStatus('synthesizing', 'Synthesizing audio...');
         var ttsRes = await fetch('https://api.sarvam.ai/text-to-speech/stream', {
@@ -437,8 +591,11 @@
             output_audio_codec: 'wav',
             pace: 1.0,
             enable_preprocessing: true
-          })
+          }),
+          signal: signal
         });
+
+        if (thisToken !== currentPlaybackToken || signal.aborted) return;
 
         if (!ttsRes.ok) {
           var errDetail = await ttsRes.text();
@@ -446,6 +603,9 @@
         }
         reader = ttsRes.body.getReader();
       }
+
+      if (thisToken !== currentPlaybackToken || signal.aborted) return;
+
       var rawChunks = [];
       var totalBytes = 0;
       var chunkIndex = 0;
@@ -463,7 +623,13 @@
       updateStatus('speaking', 'Speaking...');
 
       while (true){
+        if (thisToken !== currentPlaybackToken || signal.aborted){
+          try { reader.cancel(); } catch(e){}
+          break;
+        }
+
         var step = await reader.read();
+        if (thisToken !== currentPlaybackToken || signal.aborted) break;
         if (step.done) break;
 
         var chunk = step.value;
@@ -474,7 +640,6 @@
 
         // Chunk 0 is the 44-byte WAV header
         if (chunkIndex === 0 && chunk.length >= 44){
-          // If first chunk contains audio data past header, slice it
           var pcmData = chunk.subarray(44);
           if (pcmData.length > 0 && ctx){
             schedulePcmChunk(pcmData);
@@ -487,10 +652,9 @@
       }
 
       function schedulePcmChunk(bytes){
-        if (!ctx) return;
+        if (!ctx || thisToken !== currentPlaybackToken || signal.aborted) return;
         var slice = bytes;
 
-        // Handle odd bytes alignment across chunk boundaries
         if (leftoverByte !== null){
           var joined = new Uint8Array(slice.length + 1);
           joined[0] = leftoverByte;
@@ -506,7 +670,6 @@
 
         if (slice.length < 2) return;
 
-        // Convert 16-bit PCM buffer to Float32
         var pcm16 = new Int16Array(slice.buffer, slice.byteOffset, slice.byteLength / 2);
         var float32 = new Float32Array(pcm16.length);
         for (var i = 0; i < pcm16.length; i++){
@@ -533,6 +696,7 @@
         }
 
         sourceNode.onended = function(){
+          if (thisToken !== currentPlaybackToken) return;
           var idx = activeSources.indexOf(sourceNode);
           if (idx !== -1) activeSources.splice(idx, 1);
           if (activeSources.length === 0 && !isThinking){
@@ -545,8 +709,7 @@
       }
 
       // Assemble complete audio blob for replay & clean cleanup
-      if (rawChunks.length > 0){
-        // Fix up WAV file size in chunk 0 if possible
+      if (thisToken === currentPlaybackToken && rawChunks.length > 0){
         var firstChunk = rawChunks[0];
         if (firstChunk && firstChunk.length >= 44){
           var fixedFirst = new Uint8Array(firstChunk);
@@ -563,20 +726,52 @@
       }
 
     } catch (err){
+      if (err.name === 'AbortError' || thisToken !== currentPlaybackToken){
+        // Silently discard aborted or superseded request
+        return;
+      }
       console.error('Voice Assistant Error:', err);
       appendMessage('ai', 'Error: ' + err.message);
       updateStatus('ready', 'AI Tutor Ready');
       isPlaying = false;
       if (stopBtn) stopBtn.disabled = true;
     } finally {
-      isThinking = false;
-      if (sendBtn) sendBtn.disabled = false;
+      if (thisToken === currentPlaybackToken){
+        isThinking = false;
+        if (sendBtn) sendBtn.disabled = false;
+      }
     }
   }
 
   // =========================================================================
-  // SPEECH-TO-TEXT (MIC INPUT)
+  // SPEECH-TO-TEXT (MIC INPUT WITH 1.5s SILENCE DEBOUNCE & isFinal GATING)
   // =========================================================================
+  var speechDebounceTimer = null;
+  var accumulatedSpeechText = '';
+  var interimSpeechText = '';
+  var SILENCE_DEBOUNCE_MS = 1500; // 1.5-second silence debounce
+
+  function clearSpeechDebounce(){
+    if (speechDebounceTimer){
+      clearTimeout(speechDebounceTimer);
+      speechDebounceTimer = null;
+    }
+  }
+
+  function commitRecognizedSpeech(){
+    clearSpeechDebounce();
+    var fullQuery = (accumulatedSpeechText + ' ' + interimSpeechText).trim();
+    accumulatedSpeechText = '';
+    interimSpeechText = '';
+
+    if (speechRecognition && isRecognizing){
+      try { speechRecognition.stop(); } catch(e){}
+    }
+
+    if (fullQuery.length > 0){
+      askVoiceAssistant(fullQuery);
+    }
+  }
 
   function initSpeechRecognition(){
     var SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -589,34 +784,59 @@
     }
 
     speechRecognition = new SpeechRecognitionClass();
-    speechRecognition.continuous = false;
-    speechRecognition.interimResults = false;
+    speechRecognition.continuous = true;       // Keep listening across natural conversational pauses
+    speechRecognition.interimResults = true;    // Capture live partial words for UI feedback without triggering LLM
     speechRecognition.lang = currentLang;
 
     speechRecognition.onstart = function(){
       isRecognizing = true;
+      accumulatedSpeechText = '';
+      interimSpeechText = '';
+      clearSpeechDebounce();
+
       if (micBtn){
         micBtn.classList.add('recording');
-        micBtn.title = 'Listening... Click to stop';
+        micBtn.title = 'Listening... Click to finish speaking';
       }
       updateStatus('listening', 'Listening...');
     };
 
     speechRecognition.onresult = function(event){
-      if (event.results && event.results[0] && event.results[0][0]){
-        var transcript = event.results[0][0].transcript;
-        if (inputField){
-          inputField.value = transcript;
+      // Always reset silence debounce timer when any new audio/speech is received
+      clearSpeechDebounce();
+
+      var currentInterim = '';
+      for (var i = event.resultIndex; i < event.results.length; ++i){
+        var res = event.results[i];
+        if (res.isFinal){
+          accumulatedSpeechText += (accumulatedSpeechText ? ' ' : '') + res[0].transcript.trim();
+        } else {
+          currentInterim += res[0].transcript;
         }
-        // Auto-ask after voice input
-        setTimeout(function(){
-          askVoiceAssistant(transcript);
-        }, 300);
+      }
+      interimSpeechText = currentInterim.trim();
+
+      var displayTranscript = (accumulatedSpeechText + (interimSpeechText ? ' ' + interimSpeechText : '')).trim();
+      if (inputField && displayTranscript){
+        inputField.value = displayTranscript;
+      }
+
+      // 1.5-second silence debounce: wait until user has completely stopped speaking
+      // before sending the combined final payload to the backend
+      if (displayTranscript.length > 0){
+        speechDebounceTimer = setTimeout(function(){
+          commitRecognizedSpeech();
+        }, SILENCE_DEBOUNCE_MS);
       }
     };
 
     speechRecognition.onerror = function(event){
+      if (event.error === 'no-speech'){
+        // Silence detected by browser engine without error; do not abort prematurely
+        return;
+      }
       console.warn('Speech recognition error:', event.error);
+      clearSpeechDebounce();
       isRecognizing = false;
       if (micBtn){
         micBtn.classList.remove('recording');
@@ -631,7 +851,12 @@
         micBtn.classList.remove('recording');
         micBtn.title = 'Voice Input (Mic)';
       }
-      if (!isThinking && !isPlaying){
+
+      // If speech was captured and awaits final debounce, commit it now
+      var pending = (accumulatedSpeechText + ' ' + interimSpeechText).trim();
+      if (pending.length > 0){
+        commitRecognizedSpeech();
+      } else if (!isThinking && !isPlaying){
         updateStatus('ready', 'AI Tutor Ready');
       }
     };
@@ -647,8 +872,11 @@
     }
 
     if (isRecognizing){
-      speechRecognition.stop();
+      // User explicitly clicked mic to finish speaking
+      commitRecognizedSpeech();
     } else {
+      // User clicked mic to start speaking: immediately halt any AI speech output so mic does not capture speaker audio
+      stopAudioPlayback();
       speechRecognition.lang = currentLang;
       try {
         speechRecognition.start();

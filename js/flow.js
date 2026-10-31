@@ -66,8 +66,11 @@ var pmosCurve, nmosCurve, shootThroughCurve;
 function rebuildFlowCurves(){
   function build(base){
     var pts = base.map(function(pt){
-      var offsetY = groups[pt.layer] ? groups[pt.layer].position.y : 0;
-      return new THREE.Vector3(pt.p.x, pt.p.y + offsetY, pt.p.z);
+      var grp = groups[pt.layer];
+      var offsetX = grp ? grp.position.x : 0;
+      var offsetY = grp ? grp.position.y : 0;
+      var offsetZ = grp ? grp.position.z : 0;
+      return new THREE.Vector3(pt.p.x + offsetX, pt.p.y + offsetY, pt.p.z + offsetZ);
     });
     return new THREE.CatmullRomCurve3(pts);
   }
